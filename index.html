@@ -205,7 +205,7 @@ body {
   border-radius: 14px;
   margin-bottom: 16px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-  overflow: hidden;
+  position: relative;
 }
 .ws-header {
   display: flex;
@@ -216,7 +216,9 @@ body {
   border-bottom: 1px solid #f0f0f5;
   gap: 12px;
   transition: background 0.15s;
+  border-radius: 14px 14px 0 0;
 }
+.ws-group.collapsed .ws-header { border-radius: 14px; border-bottom: none; }
 .ws-header:hover { background: #fafafa; }
 .ws-icon { font-size: 18px; }
 .ws-title { font-size: 14px; font-weight: 700; color: #1a1a2e; flex: 1; }

@@ -622,6 +622,11 @@ tr.hidden-row { display: none; }
     <select class="filter-select" id="filter-owner" onchange="applyFilters()">
       <option value="">All Owners</option>
     </select>
+    <select class="filter-select" id="sort-by" onchange="renderAll(allRows)">
+      <option value="">Sort: Default</option>
+      <option value="due-asc">Due date ↑ earliest first</option>
+      <option value="due-desc">Due date ↓ latest first</option>
+    </select>
     <button class="filter-reset" onclick="resetFilters()">Reset</button>
     <span class="last-updated" id="last-updated"></span>
   </div>
@@ -1047,7 +1052,12 @@ function renderWorkstreams(rows) {
   const container = document.getElementById('workstreams');
   container.innerHTML = '';
 
+  const sortBy = document.getElementById('sort-by')?.value || '';
+  const parseDue = d => { const p = new Date(d); return isNaN(p) ? Infinity : p.getTime(); };
+
   Object.entries(grouped).forEach(([ws, tasks]) => {
+    if (sortBy === 'due-asc')  tasks = [...tasks].sort((a,b) => parseDue(a['Due Date']) - parseDue(b['Due Date']));
+    if (sortBy === 'due-desc') tasks = [...tasks].sort((a,b) => parseDue(b['Due Date']) - parseDue(a['Due Date']));
     const done = tasks.filter(t => (t['Status']||'').toLowerCase().includes('complete')).length;
     const pct  = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
     const icon = WS_ICONS[ws] || '📌';
@@ -1531,7 +1541,7 @@ function applyFilters() {
   });
 }
 function resetFilters() {
-  ['filter-ws','filter-status','filter-owner'].forEach(id => document.getElementById(id).value = '');
+  ['filter-ws','filter-status','filter-owner','sort-by'].forEach(id => document.getElementById(id).value = '');
   applyFilters();
 }
 

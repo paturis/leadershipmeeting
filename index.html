@@ -644,6 +644,10 @@ tr.hidden-row { display: none; }
         <input type="text" class="form-input" id="f-task" placeholder="Describe the action item…" />
       </div>
       <div class="form-group">
+        <label>Description / Notes <span style="font-weight:400;color:#8e8e93;font-size:11px">(shown below task name)</span></label>
+        <input type="text" class="form-input" id="f-notes" placeholder="e.g. To be reviewed by leadership next Sunday" />
+      </div>
+      <div class="form-group">
         <label>Workstream</label>
         <select class="form-select" id="f-ws" onchange="handleWsChange(this)"></select>
         <input type="text" class="form-input" id="f-ws-new" placeholder="New workstream name…" style="display:none;margin-top:6px" />
@@ -1151,6 +1155,7 @@ function openEditModal(rowIdx) {
 
   document.getElementById('modal-title').textContent = 'Edit Action';
   document.getElementById('f-task').value   = row['Task'] || row['Action'] || '';
+  document.getElementById('f-notes').value  = row['Notes'] || '';
   const ownerNames  = (row['Owner'] || '').split(';').map(s => s.trim()).filter(Boolean);
   const ownerEmails = (row['Owner Email'] || row['Email'] || '').split(';').map(s => s.trim());
   const contacts = loadContacts();
@@ -1183,6 +1188,7 @@ function openAddModal(ws) {
   editingRow = null;
   document.getElementById('modal-title').textContent = 'Add New Action';
   document.getElementById('f-task').value   = '';
+  document.getElementById('f-notes').value  = '';
   setOwners([]);
   document.getElementById('f-owner').value  = '';
   document.getElementById('f-email').value  = '';
@@ -1285,8 +1291,9 @@ async function saveModal() {
   saveBtn.textContent = 'Saving…';
   statusEl.textContent = '';
 
+  const notes = document.getElementById('f-notes').value.trim();
   const data = { Task: task, Workstream: ws, Owner: owner, 'Owner Email': email,
-                 'Due Date': due, Status: selectedStatus };
+                 'Due Date': due, Status: selectedStatus, Notes: notes };
   ownersArr.forEach(o => { if (o.name && o.email) autoSaveContact(o.name, o.email); });
 
   // Append new note with timestamp to history
@@ -1711,9 +1718,8 @@ function renderWsOwnersList() {
 // ── NEW WORKSTREAM ──
 function openNewWorkstreamModal() {
   document.getElementById('nws-name').value = '';
-  document.getElementById('nws-owner').value = '';
-  document.getElementById('nws-email').value = '';
   document.getElementById('new-ws-modal').classList.add('open');
+  setTimeout(() => document.getElementById('nws-name').focus(), 50);
 }
 function createWorkstream() {
   const name = document.getElementById('nws-name').value.trim().toUpperCase();

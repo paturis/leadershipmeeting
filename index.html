@@ -1041,13 +1041,18 @@ async function saveModal() {
   if (!scriptUrl) { openSetupModal(); return; }
 
   const task  = document.getElementById('f-task').value.trim();
-  const ws    = document.getElementById('f-ws').value;
   const owner = document.getElementById('f-owner').value.trim();
   const email = document.getElementById('f-email').value.trim();
   const due   = formatDueForSheet(document.getElementById('f-due').value);
-  const update= document.getElementById('f-update').value.trim();
 
   if (!task) { document.getElementById('f-task').focus(); return; }
+
+  // Resolve workstream — new or existing
+  let ws = document.getElementById('f-ws').value;
+  if (ws === '__new__') {
+    ws = document.getElementById('f-ws-new').value.trim().toUpperCase();
+    if (!ws) { document.getElementById('f-ws-new').focus(); return; }
+  }
 
   const saveBtn = document.getElementById('save-btn');
   const statusEl = document.getElementById('save-status');
@@ -1056,15 +1061,7 @@ async function saveModal() {
   statusEl.textContent = '';
 
   const data = { Task: task, Workstream: ws, Owner: owner, 'Owner Email': email,
-                 'Due Date': due, Status: selectedStatus, 'Latest Update': update };
-
-  // Resolve workstream — new or existing
-  let ws = document.getElementById('f-ws').value;
-  if (ws === '__new__') {
-    ws = document.getElementById('f-ws-new').value.trim().toUpperCase();
-    if (!ws) { document.getElementById('f-ws-new').focus(); return; }
-  }
-  data['Workstream'] = ws;
+                 'Due Date': due, Status: selectedStatus };
 
   // Append new note with timestamp to history
   const newNote = document.getElementById('f-update').value.trim();

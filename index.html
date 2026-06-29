@@ -839,6 +839,11 @@ const WS_ICONS = {
   'COMMUNICATIONS': '📢', 'TRACKER': '📊',
   'HOSPITALITY': '🏨', 'SET UP': '🔧', 'LOGISTICS': '🚛', 'AV SET UP': '🎥',
 };
+// Display-name overrides — renames old sheet values without touching the sheet
+const WS_RENAME = {
+  'VOLUNTEER COORDINATION': 'Volunteer Management',
+  'DEVOTIONAL PLANNING':    'Devotional Program',
+};
 
 let allRows = [];
 let scriptUrl = localStorage.getItem('sssio_script_url') || '';
@@ -1379,6 +1384,8 @@ function formatDueForSheet(iso) {
 }
 
 function toTitle(s) {
+  const up = (s || '').toUpperCase();
+  if (WS_RENAME[up]) return WS_RENAME[up];
   return s.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
 }
 function esc(s) {
@@ -1755,10 +1762,11 @@ function closeUpdatesModal() {
 
 // ── APPS SCRIPT CODE ──
 const APPS_SCRIPT_CODE = `// SSSIO Tracker — Apps Script Web App
-// Paste this in Extensions → Apps Script, then Deploy → New deployment
+// Paste ALL of this in Extensions → Apps Script, replacing everything, then
+// Deploy → New deployment (or Manage deployments → Edit → New version → Deploy)
 
-const SHEET_NAME  = 'Tracker';
-const TRACKER_URL = 'https://paturis.github.io/leadershipmeeting/';
+const SHEET_NAME   = 'Tracker';
+const TRACKER_URL  = 'https://paturis.github.io/leadershipmeeting/';
 const TRACKER_PASS = 'SaiRam2026';
 
 function doGet() {
@@ -1779,6 +1787,7 @@ function doPost(e) {
   const sheet = getSheet();
   const payload = JSON.parse(e.postData.contents);
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+
   if (payload.action === 'update') {
     Object.entries(payload.data).forEach(([key, val]) => {
       const col = headers.indexOf(key);
@@ -1788,13 +1797,17 @@ function doPost(e) {
       sendEmail(payload.data['Owner Email'], payload.data['Owner'] || '',
                 payload.data['Task'] || '', payload.data);
     }
+
   } else if (payload.action === 'add') {
     sheet.appendRow(headers.map(h => payload.data[h] || ''));
     if (payload.notify && payload.data['Owner Email']) {
       sendEmail(payload.data['Owner Email'], payload.data['Owner'] || '',
                 payload.data['Task'] || '', payload.data);
     }
-  }
+
+  } else if (payload.action === 'delete') {
+    sheet.deleteRow(payload._row);
+
   } else if (payload.action === 'email') {
     const recipients = payload.recipients || [];
     const toList = recipients.map(r => r.email).filter(Boolean).join(',');
@@ -1809,7 +1822,7 @@ function doPost(e) {
         '<div style="background:white;border-radius:0 0 12px 12px;padding:28px;">' +
         '<p style="font-size:14px;color:#3c3c43;white-space:pre-line;line-height:1.7;">' + payload.body + '</p>' +
         '<hr style="border:none;border-top:1px solid #f0f0f5;margin:20px 0;">' +
-        '<p style="font-size:12px;color:#8e8e93;text-align:center;">Jai Sai Ram &#x1F549;</p>' +
+        '<p style="font-size:12px;color:#8e8e93;text-align:center;">Jai Sai Ram 🕉️</p>' +
         '</div></div>';
       GmailApp.sendEmail(toList, payload.subject, '', { htmlBody: htmlBody });
     }
@@ -1849,7 +1862,7 @@ function sendEmail(toEmail, ownerName, taskName, task) {
     '</div>' +
     '<p style="font-size:12px;color:#8e8e93;text-align:center;margin-bottom:4px;">Password: <strong style="color:#1d1d1f;">' + TRACKER_PASS + '</strong></p>' +
     '<hr style="border:none;border-top:1px solid #f0f0f5;margin:20px 0;">' +
-    '<p style="font-size:13px;color:#6e6e73;text-align:center;margin:0;">Jai Sai Ram &#x1F549;</p>' +
+    '<p style="font-size:13px;color:#6e6e73;text-align:center;margin:0;">Jai Sai Ram 🕉️</p>' +
     '</div></div>';
   GmailApp.sendEmail(toEmail, subject, '', { htmlBody: htmlBody });
 }

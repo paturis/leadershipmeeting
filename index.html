@@ -1000,6 +1000,7 @@ async function loadData() {
     allRows = rows;
     renderAll(allRows);
     document.getElementById('last-updated').textContent = 'Refreshed ' + new Date().toLocaleTimeString();
+    if (scriptUrl) syncWsNamesToSheet(rows);
   } catch (e) {
     document.getElementById('workstreams').innerHTML =
       `<div class="no-results">⚠️ Could not load data.<br><br>
@@ -1550,6 +1551,28 @@ function startRenameWs(ws, titleEl) {
   input.addEventListener('click', e => e.stopPropagation());
 }
 
+// Push WS_RENAME and WS_ALIASES normalizations to the sheet (runs once per session)
+const _wsSyncedThisSession = new Set();
+async function syncWsNamesToSheet(rows) {
+  const renames = [];
+  // From WS_RENAME: sheet has old key, should be renamed to uppercase of display name
+  Object.entries(WS_RENAME).forEach(([oldKey, displayName]) => {
+    const newKey = displayName.toUpperCase();
+    if (rows.find(r => r['Workstream'] === oldKey)) renames.push([oldKey, newKey]);
+  });
+  // From WS_ALIASES: merge aliased names into canonical key
+  Object.entries(WS_ALIASES).forEach(([alias, canonical]) => {
+    if (alias !== canonical && rows.find(r => r['Workstream'] === alias))
+      renames.push([alias, canonical]);
+  });
+  for (const [oldWs, newWs] of renames) {
+    if (_wsSyncedThisSession.has(oldWs)) continue;
+    _wsSyncedThisSession.add(oldWs);
+    await writeToSheet({ action: 'renameWorkstream', oldWs, newWs }).catch(()=>{});
+  }
+  if (renames.length) await loadData(); // reload to reflect updated names
+}
+
 async function commitRenameWs(oldWs, newWs) {
   if (!scriptUrl) { alert('Connect Apps Script first (Setup button).'); return; }
   // Update local data immediately
@@ -1720,7 +1743,7 @@ function renderWsOwners(ws) {
   const owners = (all[ws] || []);
   if (!owners.length) return '<span class="ws-owner-label">Workstream Owners:</span><button class="ws-owner-edit" onclick="openWsOwnersModal(\''+esc(ws)+'\')">+ Add owners</button>';
   return '<span class="ws-owner-label">Owners:</span>' +
-    owners.map(o => `<span class="ws-owner-chip" title="${esc(o.email)}">👤 ${esc(o.name)}</span>`).join('') +
+    owners.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(o => `<span class="ws-owner-chip" title="${esc(o.email)}">👤 ${esc(o.name)}</span>`).join('') +
     `<button class="ws-owner-edit" onclick="openWsOwnersModal('${esc(ws)}')">✏️ Edit</button>`;
 }
 function openWsOwnersModal(ws) {
@@ -1775,7 +1798,7 @@ function renderWsOwnersList() {
     list.innerHTML = '<div class="no-updates">No owners assigned yet.</div>';
     return;
   }
-  list.innerHTML = owners.map(o => `
+  list.innerHTML = owners.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(o => `
     <div class="contact-row">
       <div class="contact-avatar">${esc(o.name.charAt(0).toUpperCase())}</div>
       <div class="contact-info">

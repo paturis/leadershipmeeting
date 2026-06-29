@@ -591,6 +591,12 @@ tr.hidden-row { display: none; }
         <label>Latest Update / Notes</label>
         <textarea class="form-textarea" id="f-update" placeholder="Add meeting notes, progress update…"></textarea>
       </div>
+      <div class="form-group" id="notify-group">
+        <label style="flex-direction:row;align-items:center;gap:8px;text-transform:none;font-size:13px;font-weight:500;cursor:pointer">
+          <input type="checkbox" id="f-notify" style="width:16px;height:16px;cursor:pointer" />
+          Send email notification to owner with tracker link &amp; password
+        </label>
+      </div>
       <div id="readonly-notice" class="readonly-notice" style="display:none">
         ⚙️ Connect Apps Script to save changes back to the sheet.
         <a href="#" onclick="openSetupModal(); return false;">Setup →</a>
@@ -621,7 +627,9 @@ tr.hidden-row { display: none; }
       <div class="setup-code" id="apps-script-code">// SSSIO Tracker — Apps Script Web App
 // Paste this in Extensions → Apps Script, then Deploy → New deployment
 
-const SHEET_NAME = 'Tasks'; // ← change to your sheet tab name if different
+const SHEET_NAME     = 'Tasks'; // ← change to your sheet tab name if different
+const TRACKER_URL    = 'https://paturis.github.io/leadershipmeeting/';
+const TRACKER_PASS   = 'SSIO2026';
 
 function doGet() {
   const sheet = getSheet();
@@ -641,17 +649,43 @@ function doPost(e) {
   const sheet = getSheet();
   const payload = JSON.parse(e.postData.contents);
   const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+
   if (payload.action === 'update') {
     Object.entries(payload.data).forEach(([key, val]) => {
       const col = headers.indexOf(key);
       if (col >= 0) sheet.getRange(payload._row, col + 1).setValue(val);
     });
+    if (payload.notify && payload.data['Owner Email']) {
+      sendEmail(payload.data['Owner Email'], payload.data['Owner'] || '',
+                payload.data['Task'] || '', payload.data);
+    }
   } else if (payload.action === 'add') {
     sheet.appendRow(headers.map(h => payload.data[h] || ''));
+    if (payload.notify && payload.data['Owner Email']) {
+      sendEmail(payload.data['Owner Email'], payload.data['Owner'] || '',
+                payload.data['Task'] || '', payload.data);
+    }
   }
+
   const out = ContentService.createTextOutput(JSON.stringify({ ok: true }));
   out.setMimeType(ContentService.MimeType.JSON);
   return out;
+}
+
+function sendEmail(toEmail, ownerName, taskName, task) {
+  const subject = '[SSSIO Conference] Task assigned: ' + taskName;
+  const body =
+    'Hi ' + (ownerName || 'there') + ',\n\n' +
+    'You have been assigned a task for the SSSIO Leadership Conference (July 24–29, 2026).\n\n' +
+    'Task:        ' + (task['Task'] || taskName) + '\n' +
+    'Workstream:  ' + (task['Workstream'] || '') + '\n' +
+    'Due Date:    ' + (task['Due Date'] || 'TBD') + '\n' +
+    'Status:      ' + (task['Status'] || 'Not Started') + '\n' +
+    (task['Latest Update'] ? 'Notes:       ' + task['Latest Update'] + '\n' : '') +
+    '\nTrack and update your tasks at:\n' + TRACKER_URL +
+    '\nPassword: ' + TRACKER_PASS +
+    '\n\nJai Sai Ram 🕉️';
+  GmailApp.sendEmail(toEmail, subject, body);
 }
 
 function getSheet() {
@@ -933,6 +967,7 @@ function openEditModal(rowIdx) {
   selectStatus(row['Status'] || 'Not Started');
   document.getElementById('save-status').textContent = '';
   document.getElementById('save-status').className = 'save-status';
+  document.getElementById('f-notify').checked = false;
   updateSetupUI();
   document.getElementById('edit-modal').classList.add('open');
 }
@@ -949,6 +984,7 @@ function openAddModal(ws) {
   selectStatus('Not Started');
   document.getElementById('save-status').textContent = '';
   document.getElementById('save-status').className = 'save-status';
+  document.getElementById('f-notify').checked = true; // default on for new tasks
   updateSetupUI();
   document.getElementById('edit-modal').classList.add('open');
 }
@@ -999,12 +1035,13 @@ async function saveModal() {
   const data = { Task: task, Workstream: ws, Owner: owner, 'Owner Email': email,
                  'Due Date': due, Status: selectedStatus, 'Latest Update': update };
 
+  const notify = document.getElementById('f-notify').checked;
   try {
     if (editingRow) {
-      await writeToSheet({ action: 'update', _row: editingRow._row, data });
+      await writeToSheet({ action: 'update', _row: editingRow._row, data, notify });
       Object.assign(editingRow, data);
     } else {
-      await writeToSheet({ action: 'add', data });
+      await writeToSheet({ action: 'add', data, notify });
       await loadData();
     }
     statusEl.textContent = '✓ Saved';

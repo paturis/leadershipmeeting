@@ -653,6 +653,43 @@ tr.hidden-row { display: none; }
   </div>
 </div>
 
+<!-- EMAIL COMPOSE MODAL -->
+<div class="modal-backdrop" id="email-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h2 id="email-modal-title">✉️ Email Workstream Team</h2>
+      <button class="modal-close" onclick="closeEmailModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>To</label>
+        <div id="email-to-chips" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border:1.5px solid #d1d1d6;border-radius:10px;min-height:42px;cursor:text" onclick="document.getElementById('email-to-input').focus()"></div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input type="text" class="form-input" id="email-to-input" placeholder="Add recipient name or email…" list="contacts-datalist" oninput="autofillToEmail(this.value)" style="flex:1" />
+          <button class="btn-secondary" onclick="addEmailRecipient()" style="white-space:nowrap">+ Add</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Subject</label>
+        <input type="text" class="form-input" id="email-subject" />
+      </div>
+      <div class="form-group">
+        <label>Message</label>
+        <textarea class="form-textarea" id="email-body" style="min-height:140px" placeholder="Type your message…"></textarea>
+      </div>
+      <div id="email-readonly-notice" class="readonly-notice" style="display:none">
+        ⚙️ Connect Apps Script to send emails from this page.
+        <a href="#" onclick="openSetupModal(); return false;">Setup →</a>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span class="save-status" id="email-status"></span>
+      <button class="btn-secondary" onclick="closeEmailModal()">Cancel</button>
+      <button class="btn-primary" id="email-send-btn" onclick="sendEmailCompose()">✉️ Send</button>
+    </div>
+  </div>
+</div>
+
 <!-- NEW WORKSTREAM MODAL -->
 <div class="modal-backdrop" id="new-ws-modal">
   <div class="modal" style="max-width:420px">
@@ -975,6 +1012,7 @@ function renderWorkstreams(rows) {
           <span class="ws-count">${done}/${tasks.length} done</span>
         </div>
         <button class="ws-add-btn" onclick="openUpdatesModal('${esc(ws)}')" style="background:rgba(15,52,96,0.05)">📋 Updates</button>
+        ${isAdmin() ? `<button class="ws-add-btn" onclick="openEmailModal('${esc(ws)}')">✉️ Email</button>` : ''}
         ${isAdmin() ? `<button class="ws-add-btn" onclick="openWsOwnersModal('${esc(ws)}')">👥 Owners</button>` : ''}
         ${isAdmin() ? `<button class="ws-add-btn" onclick="openAddModal('${esc(ws)}')">+ Add Task</button>` : ''}
         <span class="ws-chevron" onclick="toggleGroupEl(this.closest('.ws-group'))">▼</span>
@@ -1336,6 +1374,100 @@ document.getElementById('setup-modal').addEventListener('click', e => { if (e.ta
 document.getElementById('contacts-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeContactsModal(); });
 document.getElementById('updates-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeUpdatesModal(); });
 
+// ── EMAIL COMPOSE ──
+let emailRecipients = []; // [{name, email}]
+
+function openEmailModal(ws) {
+  emailRecipients = [];
+  const owners = (loadWsOwners()[ws] || []);
+  owners.forEach(o => emailRecipients.push({ name: o.name, email: o.email }));
+  document.getElementById('email-modal-title').textContent = '✉️ Email — ' + toTitle(ws) + ' Team';
+  document.getElementById('email-subject').value = '[SSSIO Conference] ' + toTitle(ws) + ' Update';
+  document.getElementById('email-body').value = '';
+  document.getElementById('email-to-input').value = '';
+  document.getElementById('email-status').textContent = '';
+  document.getElementById('email-status').className = 'save-status';
+  document.getElementById('email-send-btn').disabled = !scriptUrl;
+  document.getElementById('email-readonly-notice').style.display = scriptUrl ? 'none' : 'block';
+  renderEmailChips();
+  document.getElementById('email-modal').classList.add('open');
+}
+
+function closeEmailModal() {
+  document.getElementById('email-modal').classList.remove('open');
+}
+
+function autofillToEmail(val) {
+  const contact = loadContacts().find(c => c.name.toLowerCase() === val.toLowerCase());
+  if (contact) {
+    addEmailRecipient(contact.name, contact.email);
+    document.getElementById('email-to-input').value = '';
+  }
+}
+
+function addEmailRecipient(name, email) {
+  if (!name) {
+    const val = document.getElementById('email-to-input').value.trim();
+    if (!val) return;
+    const contact = loadContacts().find(c =>
+      c.name.toLowerCase() === val.toLowerCase() || c.email.toLowerCase() === val.toLowerCase());
+    name  = contact ? contact.name  : val;
+    email = contact ? contact.email : val;
+  }
+  if (!emailRecipients.find(r => r.email === email)) {
+    emailRecipients.push({ name, email });
+    renderEmailChips();
+  }
+  document.getElementById('email-to-input').value = '';
+}
+
+function removeEmailRecipient(email) {
+  emailRecipients = emailRecipients.filter(r => r.email !== email);
+  renderEmailChips();
+}
+
+function renderEmailChips() {
+  document.getElementById('email-to-chips').innerHTML = emailRecipients.map(r =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;background:#f0f4ff;color:#0f3460;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:500">
+      ${esc(r.name || r.email)}
+      <button onclick="removeEmailRecipient('${esc(r.email)}')" style="background:none;border:none;cursor:pointer;color:#8e8e93;font-size:13px;padding:0 2px">✕</button>
+    </span>`
+  ).join('');
+}
+
+document.getElementById('email-to-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addEmailRecipient(); }
+});
+
+async function sendEmailCompose() {
+  if (!scriptUrl) { openSetupModal(); return; }
+  if (!emailRecipients.length) { document.getElementById('email-to-input').focus(); return; }
+  const subject = document.getElementById('email-subject').value.trim();
+  const body    = document.getElementById('email-body').value.trim();
+  if (!subject || !body) return;
+
+  const btn = document.getElementById('email-send-btn');
+  const statusEl = document.getElementById('email-status');
+  btn.disabled = true; btn.textContent = 'Sending…';
+
+  try {
+    await fetch(scriptUrl, {
+      method: 'POST', mode: 'no-cors',
+      body: JSON.stringify({ action: 'email', recipients: emailRecipients, subject, body }),
+      headers: { 'Content-Type': 'application/json' }
+    });
+    statusEl.textContent = '✓ Sent to ' + emailRecipients.length + ' recipient(s)';
+    statusEl.className = 'save-status ok';
+    setTimeout(closeEmailModal, 1500);
+  } catch(e) {
+    statusEl.textContent = '⚠ Failed to send';
+    statusEl.className = 'save-status err';
+  }
+  btn.disabled = false; btn.textContent = '✉️ Send';
+}
+
+document.getElementById('email-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeEmailModal(); });
+
 // ── WORKSTREAM OWNERS ──
 let currentWsOwners = null;
 
@@ -1592,6 +1724,26 @@ function doPost(e) {
                 payload.data['Task'] || '', payload.data);
     }
   }
+  } else if (payload.action === 'email') {
+    const recipients = payload.recipients || [];
+    const toList = recipients.map(r => r.email).filter(Boolean).join(',');
+    if (toList) {
+      const htmlBody =
+        '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#f5f5f7;padding:24px;">' +
+        '<div style="background:linear-gradient(135deg,#1a1a2e,#0f3460);border-radius:12px 12px 0 0;padding:20px 28px;text-align:center;">' +
+        '<img src="https://paturis.github.io/leadershipmeeting/sssio-logo.png" style="width:60px;height:60px;object-fit:contain;margin-bottom:8px;" />' +
+        '<h1 style="color:white;font-size:17px;margin:0;">SSSIO Leadership Conference</h1>' +
+        '<p style="color:rgba(255,255,255,0.7);font-size:12px;margin:4px 0 0;">July 24-29, 2026</p>' +
+        '</div>' +
+        '<div style="background:white;border-radius:0 0 12px 12px;padding:28px;">' +
+        '<p style="font-size:14px;color:#3c3c43;white-space:pre-line;line-height:1.7;">' + payload.body + '</p>' +
+        '<hr style="border:none;border-top:1px solid #f0f0f5;margin:20px 0;">' +
+        '<p style="font-size:12px;color:#8e8e93;text-align:center;">Jai Sai Ram &#x1F549;</p>' +
+        '</div></div>';
+      GmailApp.sendEmail(toList, payload.subject, '', { htmlBody: htmlBody });
+    }
+  }
+
   const out = ContentService.createTextOutput(JSON.stringify({ ok: true }));
   out.setMimeType(ContentService.MimeType.JSON);
   return out;

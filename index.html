@@ -894,8 +894,13 @@ const WS_ICONS = {
 };
 // Display-name overrides — renames old sheet values without touching the sheet
 const WS_RENAME = {
-  'VOLUNTEER COORDINATION': 'Volunteer Management',
-  'DEVOTIONAL PLANNING':    'Devotional Program',
+  'VOLUNTEER COORDINATION':  'Volunteer Management',
+  'DEVOTIONAL PLANNING':     'Devotional Program',
+};
+// Canonical workstream key aliases — merges these into the target key
+const WS_ALIASES = {
+  'INFORMATION TECHNOLOGY': 'IT',
+  'ADMIN':                  'ADMIN',
 };
 
 let allRows = [];
@@ -1686,11 +1691,24 @@ document.getElementById('email-modal').addEventListener('click', e => { if (e.ta
 // ── WORKSTREAM OWNERS ──
 let currentWsOwners = null;
 
+function normalizeWsOwners(raw) {
+  const out = {};
+  Object.entries(raw).forEach(([ws, owners]) => {
+    const key = WS_ALIASES[ws.toUpperCase()] || ws;
+    if (!out[key]) out[key] = [];
+    owners.forEach(o => {
+      if (o.name && !out[key].find(x => x.name.toLowerCase() === o.name.toLowerCase()))
+        out[key].push(o);
+    });
+  });
+  return out;
+}
 function loadWsOwners() {
   return JSON.parse(localStorage.getItem('sssio_ws_owners') || '{}');
 }
 function saveWsOwners(data) {
-  localStorage.setItem('sssio_ws_owners', JSON.stringify(data));
+  const clean = normalizeWsOwners(data);
+  localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
   syncWsOwnersToSheet();
 }
 function syncWsOwnersToSheet() {
@@ -2188,6 +2206,14 @@ function seedWsOwners() {
   if (changed) saveWsOwners(existing);
 }
 seedWsOwners();
+
+// One-time cleanup: normalize aliases and deduplicate wsOwners, then sync to sheet
+(function cleanupWsOwners() {
+  const raw = JSON.parse(localStorage.getItem('sssio_ws_owners') || '{}');
+  const clean = normalizeWsOwners(raw);
+  localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
+  syncWsOwnersToSheet();
+})();
 
 // init
 refreshDatalist();

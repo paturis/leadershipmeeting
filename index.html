@@ -970,28 +970,24 @@ async function loadData() {
       const json = await res.json();
       rows = json.rows;
       headers = json.headers;
-      // Sync contacts from sheet (merge: keep any local-only entries)
-      if (json.contacts) {
-        const deleted = loadDeletedEmails();
-        const sheetContacts = json.contacts.filter(c => !deleted.has(c.email.toLowerCase()));
-        const local = loadContacts();
-        const merged = [...sheetContacts];
-        local.forEach(lc => {
-          if (!deleted.has(lc.email.toLowerCase()) && !merged.find(m => m.email.toLowerCase() === lc.email.toLowerCase()))
-            merged.push(lc);
-        });
-        localStorage.setItem('sssio_contacts', JSON.stringify(deduplicateContacts(merged)));
+      // Sheet is source of truth — replace cache completely, no merging
+      if (json.contacts !== undefined) {
+        const clean = deduplicateContacts(json.contacts);
+        localStorage.setItem('sssio_contacts', JSON.stringify(clean));
         refreshDatalist();
-        if (merged.length !== sheetContacts.length) syncContactsToSheet();
+        // Push deduped version back if sheet had dupes
+        if (clean.length !== json.contacts.length)
+          writeToSheet({ action: 'saveContacts', contacts: clean }).catch(()=>{});
       }
-      // Sync wsOwners from sheet (sheet is authoritative)
-      if (json.wsOwners) {
-        // Merge: keep any local keys not in sheet
-        const local = loadWsOwners();
-        const merged = { ...local, ...json.wsOwners };
-        localStorage.setItem('sssio_ws_owners', JSON.stringify(merged));
-        if (Object.keys(json.wsOwners).length < Object.keys(merged).length) syncWsOwnersToSheet();
+      if (json.wsOwners !== undefined) {
+        const clean = normalizeWsOwners(json.wsOwners);
+        localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
+        // Push clean version back if sheet had dupes/aliases
+        if (JSON.stringify(clean) !== JSON.stringify(json.wsOwners))
+          writeToSheet({ action: 'saveWsOwners', wsOwners: clean }).catch(()=>{});
       }
+      if (json.workstreams !== undefined)
+        localStorage.setItem('sssio_workstreams', JSON.stringify(json.workstreams));
     } else {
       const res = await fetch(CSV_URL + '&t=' + Date.now());
       const text = await res.text();
@@ -1000,7 +996,6 @@ async function loadData() {
     allRows = rows;
     renderAll(allRows);
     document.getElementById('last-updated').textContent = 'Refreshed ' + new Date().toLocaleTimeString();
-    if (scriptUrl) syncWsNamesToSheet(rows);
   } catch (e) {
     document.getElementById('workstreams').innerHTML =
       `<div class="no-results">⚠️ Could not load data.<br><br>
@@ -1732,11 +1727,7 @@ function loadWsOwners() {
 function saveWsOwners(data) {
   const clean = normalizeWsOwners(data);
   localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
-  syncWsOwnersToSheet();
-}
-function syncWsOwnersToSheet() {
-  if (!scriptUrl) return;
-  writeToSheet({ action: 'saveWsOwners', wsOwners: loadWsOwners() }).catch(() => {});
+  writeToSheet({ action: 'saveWsOwners', wsOwners: clean }).catch(() => {});
 }
 function renderWsOwners(ws) {
   const all = loadWsOwners();
@@ -1831,10 +1822,11 @@ function createWorkstream() {
 }
 
 function loadPendingWorkstreams() {
-  return JSON.parse(localStorage.getItem('sssio_pending_ws') || '[]');
+  return JSON.parse(localStorage.getItem('sssio_workstreams') || localStorage.getItem('sssio_pending_ws') || '[]');
 }
 function savePendingWorkstreams(list) {
-  localStorage.setItem('sssio_pending_ws', JSON.stringify(list));
+  localStorage.setItem('sssio_workstreams', JSON.stringify(list));
+  writeToSheet({ action: 'saveWorkstreams', workstreams: list }).catch(() => {});
 }
 
 document.getElementById('new-ws-modal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
@@ -1864,11 +1856,7 @@ function saveContacts(contacts) {
   const clean = deduplicateContacts(contacts.filter(c => !deleted.has(c.email.toLowerCase())));
   localStorage.setItem('sssio_contacts', JSON.stringify(clean));
   refreshDatalist();
-  syncContactsToSheet();
-}
-function syncContactsToSheet() {
-  if (!scriptUrl) return;
-  writeToSheet({ action: 'saveContacts', contacts: loadContacts() }).catch(() => {});
+  writeToSheet({ action: 'saveContacts', contacts: clean }).catch(() => {});
 }
 function refreshDatalist() {
   const dl = document.getElementById('contacts-datalist');
@@ -2076,7 +2064,15 @@ function doGet() {
     });
   }
 
-  const out = ContentService.createTextOutput(JSON.stringify({ headers, rows, contacts, wsOwners }));
+  var workstreams = [];
+  var wsListSheet = ss.getSheetByName('Workstreams');
+  if (wsListSheet && wsListSheet.getLastRow() > 1) {
+    wsListSheet.getDataRange().getValues().slice(1).forEach(function(row) {
+      if (row[0]) workstreams.push(String(row[0]));
+    });
+  }
+
+  const out = ContentService.createTextOutput(JSON.stringify({ headers, rows, contacts, wsOwners, workstreams }));
   out.setMimeType(ContentService.MimeType.JSON);
   return out;
 }
@@ -2121,6 +2117,13 @@ function doPost(e) {
     Object.entries(payload.wsOwners || {}).forEach(function([ws, owners]) {
       owners.forEach(function(o) { wSheet.appendRow([ws, o.name, o.email]); });
     });
+
+  } else if (payload.action === 'saveWorkstreams') {
+    var ss4 = SpreadsheetApp.getActiveSpreadsheet();
+    var wkSheet = ss4.getSheetByName('Workstreams') || ss4.insertSheet('Workstreams');
+    wkSheet.clearContents();
+    wkSheet.appendRow(['Name']);
+    (payload.workstreams || []).forEach(function(w) { wkSheet.appendRow([w]); });
 
   } else if (payload.action === 'renameWorkstream') {
     const wsCol = headers.indexOf('Workstream');

@@ -751,7 +751,7 @@ function logout() {
   document.getElementById('app').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
 }
-if (localStorage.getItem('ssio_auth') === '1') showApp();
+showApp(); // password disabled temporarily
 
 function showApp() {
   document.getElementById('auth-screen').style.display = 'none';

@@ -79,7 +79,7 @@ body {
 }
 .header-left h1 { font-size: 17px; font-weight: 700; }
 .header-left p { font-size: 12px; opacity: 0.65; margin-top: 2px; }
-.header-right { display: flex; align-items: center; gap: 10px; }
+.header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .sheet-link {
   display: flex;
   align-items: center;
@@ -94,7 +94,7 @@ body {
   transition: background 0.2s;
 }
 .sheet-link:hover { background: rgba(255,255,255,0.22); }
-.refresh-btn {
+.refresh-btn, .logout-btn, .add-main-btn {
   background: rgba(255,255,255,0.12);
   border: none;
   color: white;
@@ -103,19 +103,29 @@ body {
   font-size: 12px;
   cursor: pointer;
   transition: background 0.2s;
+  font-weight: 500;
 }
-.refresh-btn:hover { background: rgba(255,255,255,0.22); }
+.refresh-btn:hover, .add-main-btn:hover { background: rgba(255,255,255,0.22); }
 .logout-btn {
   background: transparent;
   border: 1px solid rgba(255,255,255,0.3);
   color: rgba(255,255,255,0.7);
-  padding: 7px 13px;
-  border-radius: 8px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
 }
 .logout-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+
+/* ── SETUP BANNER ── */
+.setup-banner {
+  background: #fff8e1;
+  border-bottom: 1px solid #ffe082;
+  padding: 12px 28px;
+  font-size: 13px;
+  color: #7c5200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.setup-banner a { color: #0f3460; font-weight: 600; }
+.setup-banner.hidden { display: none; }
 
 /* ── SUMMARY CARDS ── */
 .summary-bar {
@@ -215,6 +225,20 @@ body {
 .ws-group.collapsed .ws-chevron { transform: rotate(-90deg); }
 .ws-group.collapsed .ws-body { display: none; }
 
+.ws-add-btn {
+  background: rgba(15,52,96,0.08);
+  border: none;
+  color: #0f3460;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.ws-add-btn:hover { background: rgba(15,52,96,0.15); }
+
 /* ── TASK TABLE ── */
 .ws-body { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -232,8 +256,8 @@ thead th {
 }
 tbody tr { border-bottom: 1px solid #f7f7f9; transition: background 0.1s; }
 tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: #f8f8fb; }
-tbody td { padding: 11px 14px; vertical-align: top; }
+tbody tr:hover { background: #f0f4ff; cursor: pointer; }
+tbody td { padding: 11px 14px; vertical-align: middle; }
 .task-name { font-weight: 500; color: #1d1d1f; line-height: 1.4; }
 .task-notes { font-size: 11px; color: #8e8e93; margin-top: 3px; line-height: 1.4; }
 .owner-chip {
@@ -247,7 +271,9 @@ tbody td { padding: 11px 14px; vertical-align: top; }
   font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
+  text-decoration: none;
 }
+.owner-chip:hover { background: #e0e0eb; }
 .due-date { font-size: 12px; font-weight: 500; white-space: nowrap; }
 .due-overdue { color: #c0392b; }
 .due-soon { color: #d97706; }
@@ -260,7 +286,30 @@ tbody td { padding: 11px 14px; vertical-align: top; }
 .badge-complete    { background: #e8f5e9; color: #1a8c4e; }
 .badge-blocked     { background: #fdecea; color: #c0392b; }
 
-.weekly-update { font-size: 11px; color: #3c3c43; line-height: 1.4; max-width: 160px; }
+/* ── QUICK STATUS BUTTONS ── */
+.quick-status {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.qs-btn {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.qs-btn:hover { opacity: 0.8; }
+.qs-ns  { background: #f0f0f5; color: #6e6e73; border-color: #d1d1d6; }
+.qs-wip { background: #fff8e1; color: #b8860b; border-color: #ffe082; }
+.qs-done{ background: #e8f5e9; color: #1a8c4e; border-color: #a5d6a7; }
+.qs-blk { background: #fdecea; color: #c0392b; border-color: #ffcdd2; }
+.qs-btn.active { box-shadow: 0 0 0 2px currentColor; }
+
+.weekly-update { font-size: 11px; color: #3c3c43; line-height: 1.4; max-width: 200px; }
 .weekly-update.empty { color: #c7c7cc; font-style: italic; }
 
 /* ── LOADING / EMPTY ── */
@@ -277,6 +326,159 @@ tbody td { padding: 11px 14px; vertical-align: top; }
 .no-results { text-align: center; padding: 40px; color: #8e8e93; font-size: 13px; }
 tr.hidden-row { display: none; }
 .ws-group.hidden-ws { display: none; }
+
+/* ── MODAL ── */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  display: none;
+}
+.modal-backdrop.open { display: flex; }
+.modal {
+  background: white;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.25);
+  animation: modal-in 0.2s ease;
+}
+@keyframes modal-in { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid #f0f0f5;
+}
+.modal-header h2 { font-size: 17px; font-weight: 700; color: #1a1a2e; }
+.modal-close {
+  background: #f0f0f5;
+  border: none;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  color: #6e6e73;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.modal-close:hover { background: #e0e0e5; }
+.modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid #f0f0f5; display: flex; gap: 10px; justify-content: flex-end; }
+
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 12px; font-weight: 600; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.4px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-input, .form-select, .form-textarea {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1.5px solid #d1d1d6;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+  color: #1d1d1f;
+  background: white;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #0f3460; }
+.form-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+
+/* status picker */
+.status-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+.sp-btn {
+  flex: 1;
+  min-width: 110px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+.sp-ns   { background: #f0f0f5; color: #6e6e73; border-color: #d1d1d6; }
+.sp-wip  { background: #fff8e1; color: #b8860b; border-color: #ffe082; }
+.sp-done { background: #e8f5e9; color: #1a8c4e; border-color: #a5d6a7; }
+.sp-blk  { background: #fdecea; color: #c0392b; border-color: #ffcdd2; }
+.sp-btn.selected { box-shadow: 0 0 0 3px currentColor; transform: scale(1.03); }
+
+.btn-primary {
+  background: #0f3460;
+  color: white;
+  border: none;
+  padding: 11px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-primary:hover { background: #16213e; }
+.btn-primary:disabled { background: #aeaeb2; cursor: not-allowed; }
+.btn-secondary {
+  background: #f0f0f5;
+  color: #1d1d1f;
+  border: none;
+  padding: 11px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-secondary:hover { background: #e0e0e5; }
+
+.save-status { font-size: 12px; color: #6e6e73; align-self: center; margin-right: auto; }
+.save-status.ok { color: #1a8c4e; }
+.save-status.err { color: #c0392b; }
+
+/* ── SETUP MODAL ── */
+.setup-code {
+  background: #1a1a2e;
+  color: #a5f3a5;
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+  margin-top: 4px;
+}
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px; height: 22px;
+  background: #0f3460;
+  color: white;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+.step { display: flex; align-items: flex-start; gap: 0; margin-bottom: 8px; font-size: 13px; line-height: 1.5; }
+
+/* read-only notice */
+.readonly-notice {
+  background: #f0f4ff;
+  border: 1.5px solid #c7d7f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #0f3460;
+  text-align: center;
+}
 </style>
 </head>
 <body>
@@ -301,10 +503,17 @@ tr.hidden-row { display: none; }
       <p>July 24–29, 2026 · Leadership Meeting</p>
     </div>
     <div class="header-right">
+      <button class="add-main-btn" onclick="openAddModal(null)">+ Add Action</button>
       <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
-      <a class="sheet-link" href="https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit" target="_blank">📊 Edit Sheet</a>
+      <a class="sheet-link" id="sheet-link" href="https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit" target="_blank">📊 Sheet</a>
+      <button class="refresh-btn" onclick="openSetupModal()">⚙️ Setup</button>
       <button class="logout-btn" onclick="logout()">Sign out</button>
     </div>
+  </div>
+
+  <div class="setup-banner" id="setup-banner">
+    ⚠️ <strong>Read-only mode.</strong> Connect Google Apps Script to enable saving updates directly from this page.
+    <a href="#" onclick="openSetupModal(); return false;">Setup guide →</a>
   </div>
 
   <div class="summary-bar">
@@ -339,30 +548,156 @@ tr.hidden-row { display: none; }
   </div>
 </div>
 
+<!-- EDIT / ADD MODAL -->
+<div class="modal-backdrop" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">Edit Action</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Task / Action</label>
+        <input type="text" class="form-input" id="f-task" placeholder="Describe the action item…" />
+      </div>
+      <div class="form-group">
+        <label>Workstream</label>
+        <select class="form-select" id="f-ws"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Owner</label>
+          <input type="text" class="form-input" id="f-owner" placeholder="Name" />
+        </div>
+        <div class="form-group">
+          <label>Owner Email</label>
+          <input type="email" class="form-input" id="f-email" placeholder="email@example.com" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Due Date</label>
+        <input type="date" class="form-input" id="f-due" />
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <div class="status-picker">
+          <button class="sp-btn sp-ns"   onclick="selectStatus('Not Started')">Not Started</button>
+          <button class="sp-btn sp-wip"  onclick="selectStatus('In Progress')">In Progress</button>
+          <button class="sp-btn sp-done" onclick="selectStatus('Complete')">✓ Complete</button>
+          <button class="sp-btn sp-blk"  onclick="selectStatus('Blocked')">⚠ Blocked</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Latest Update / Notes</label>
+        <textarea class="form-textarea" id="f-update" placeholder="Add meeting notes, progress update…"></textarea>
+      </div>
+      <div id="readonly-notice" class="readonly-notice" style="display:none">
+        ⚙️ Connect Apps Script to save changes back to the sheet.
+        <a href="#" onclick="openSetupModal(); return false;">Setup →</a>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span class="save-status" id="save-status"></span>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" id="save-btn" onclick="saveModal()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETUP MODAL -->
+<div class="modal-backdrop" id="setup-modal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <h2>⚙️ Connect Google Sheet (One-time Setup)</h2>
+      <button class="modal-close" onclick="closeSetupModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#3c3c43;line-height:1.6">
+        To save updates directly from this page back to your Google Sheet, deploy a small Apps Script as a Web App. This takes about 3 minutes.
+      </p>
+
+      <div class="step"><span class="step-num">1</span><span>Open your <a href="https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit" target="_blank" style="color:#0f3460;font-weight:600">Google Sheet</a>, go to <strong>Extensions → Apps Script</strong></span></div>
+      <div class="step"><span class="step-num">2</span><span>Delete any existing code, paste the script below, and click <strong>Save</strong></span></div>
+      <div class="setup-code" id="apps-script-code">// SSSIO Tracker — Apps Script Web App
+// Paste this in Extensions → Apps Script, then Deploy → New deployment
+
+const SHEET_NAME = 'Tasks'; // ← change to your sheet tab name if different
+
+function doGet() {
+  const sheet = getSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0].map(String);
+  const rows = data.slice(1).map((row, i) => {
+    const obj = { _row: i + 2 };
+    headers.forEach((h, j) => { obj[h] = String(row[j] || ''); });
+    return obj;
+  }).filter(r => r['Workstream'] && r['Workstream'].trim());
+  const out = ContentService.createTextOutput(JSON.stringify({ headers, rows }));
+  out.setMimeType(ContentService.MimeType.JSON);
+  return out;
+}
+
+function doPost(e) {
+  const sheet = getSheet();
+  const payload = JSON.parse(e.postData.contents);
+  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+  if (payload.action === 'update') {
+    Object.entries(payload.data).forEach(([key, val]) => {
+      const col = headers.indexOf(key);
+      if (col >= 0) sheet.getRange(payload._row, col + 1).setValue(val);
+    });
+  } else if (payload.action === 'add') {
+    sheet.appendRow(headers.map(h => payload.data[h] || ''));
+  }
+  const out = ContentService.createTextOutput(JSON.stringify({ ok: true }));
+  out.setMimeType(ContentService.MimeType.JSON);
+  return out;
+}
+
+function getSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  return ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+}</div>
+
+      <div class="step" style="margin-top:12px"><span class="step-num">3</span><span>Click <strong>Deploy → New deployment</strong> → type: <strong>Web app</strong> → Execute as: <strong>Me</strong> → Who has access: <strong>Anyone</strong> → Deploy</span></div>
+      <div class="step"><span class="step-num">4</span><span>Copy the <strong>Web app URL</strong> and paste it below, then click Save</span></div>
+
+      <div class="form-group" style="margin-top:4px">
+        <label>Apps Script Web App URL</label>
+        <input type="url" class="form-input" id="script-url-input" placeholder="https://script.google.com/macros/s/…/exec" />
+      </div>
+
+      <p style="font-size:12px;color:#8e8e93;margin-top:-8px">
+        Also make sure your sheet tab is named <strong>Tasks</strong> (or update SHEET_NAME in the script to match your tab name).
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeSetupModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveScriptUrl()">Save & Connect</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// ── CONFIG ──
 const PASSWORD  = 'SSIO2026';
-// After publishing your sheet (File → Share → Publish to web → CSV), paste that URL here:
 const CSV_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSHnpLwn-E9Q5o7n9V4NdeDYSPwlZQgz-GOCMBlNrROnSJrle0MKwblK7kXx_Mgrq1LKIQgBvS2JyUy/pub?gid=538559195&single=true&output=csv';
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit';
 
 const WS_ICONS = {
-  'REGISTRATION': '📋',
-  'FOOD': '🍽️',
-  'TRANSPORTATION': '🚐',
-  'DECORATION': '🌸',
-  'VOLUNTEER COORDINATION': '🙌',
-  'BUDGET': '💰',
-  'DEVOTIONAL PLANNING': '🙏',
-  'COMMUNICATIONS': '📢',
-  'TRACKER': '📊',
+  'REGISTRATION': '📋', 'FOOD': '🍽️', 'TRANSPORTATION': '🚐',
+  'DECORATION': '🌸', 'VOLUNTEER COORDINATION': '🙌', 'BUDGET': '💰',
+  'DEVOTIONAL PLANNING': '🙏', 'COMMUNICATIONS': '📢', 'TRACKER': '📊',
 };
 
 let allRows = [];
+let scriptUrl = localStorage.getItem('sssio_script_url') || '';
+let editingRow = null; // null = add mode, object = edit mode
+let selectedStatus = 'Not Started';
 
 // ── AUTH ──
 function checkPassword() {
-  const val = document.getElementById('pw-input').value;
-  if (val === PASSWORD) {
+  if (document.getElementById('pw-input').value === PASSWORD) {
     localStorage.setItem('ssio_auth', '1');
     showApp();
   } else {
@@ -371,9 +706,7 @@ function checkPassword() {
     document.getElementById('pw-input').focus();
   }
 }
-document.getElementById('pw-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') checkPassword();
-});
+document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
 function logout() {
   localStorage.removeItem('ssio_auth');
   document.getElementById('app').style.display = 'none';
@@ -384,7 +717,16 @@ if (localStorage.getItem('ssio_auth') === '1') showApp();
 function showApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  updateSetupUI();
   loadData();
+}
+
+function updateSetupUI() {
+  const hasScript = !!scriptUrl;
+  document.getElementById('setup-banner').classList.toggle('hidden', hasScript);
+  document.getElementById('readonly-notice').style.display = hasScript ? 'none' : 'block';
+  document.getElementById('save-btn').disabled = !hasScript;
+  document.getElementById('save-btn').title = hasScript ? '' : 'Connect Apps Script first (⚙️ Setup)';
 }
 
 // ── DATA LOAD ──
@@ -392,45 +734,47 @@ async function loadData() {
   document.getElementById('workstreams').innerHTML =
     '<div class="loading"><div class="spinner"></div>Loading tracker data…</div>';
   try {
-    const res = await fetch(CSV_URL + '&t=' + Date.now());
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const text = await res.text();
-    allRows = parseCSV(text);
+    let rows, headers;
+    if (scriptUrl) {
+      const res = await fetch(scriptUrl, { redirect: 'follow' });
+      const json = await res.json();
+      rows = json.rows;
+      headers = json.headers;
+    } else {
+      const res = await fetch(CSV_URL + '&t=' + Date.now());
+      const text = await res.text();
+      rows = parseCSV(text);
+    }
+    allRows = rows;
     renderAll(allRows);
-    document.getElementById('last-updated').textContent =
-      'Refreshed ' + new Date().toLocaleTimeString();
+    document.getElementById('last-updated').textContent = 'Refreshed ' + new Date().toLocaleTimeString();
   } catch (e) {
     document.getElementById('workstreams').innerHTML =
-      `<div class="no-results">⚠️ Could not load data. Make sure the sheet is published to the web.<br><br>
+      `<div class="no-results">⚠️ Could not load data.<br><br>
        <a href="${SHEET_URL}" target="_blank" style="color:#0f3460">Open Google Sheet directly →</a></div>`;
   }
 }
 
-// ── CSV PARSER ──
+// ── CSV PARSER (read-only fallback) ──
 function parseCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   const headers = splitCSVLine(lines[0]);
-  return lines.slice(1).map(line => {
+  return lines.slice(1).map((line, i) => {
     const vals = splitCSVLine(line);
-    const obj = {};
-    headers.forEach((h, i) => obj[h.trim()] = (vals[i] || '').trim());
+    const obj = { _row: i + 2 };
+    headers.forEach((h, j) => obj[h.trim()] = (vals[j] || '').trim());
     return obj;
   }).filter(r => r['Workstream']);
 }
-
 function splitCSVLine(line) {
-  const result = [];
-  let cur = '', inQ = false;
+  const result = []; let cur = '', inQ = false;
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
-    if (c === '"') {
-      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
-      else inQ = !inQ;
-    } else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    if (c === '"') { if (inQ && line[i+1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+    else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
     else cur += c;
   }
-  result.push(cur);
-  return result;
+  result.push(cur); return result;
 }
 
 // ── RENDER ──
@@ -449,19 +793,18 @@ function updateSummary(rows) {
     else if (s.includes('blocked')) c.blocked++;
     else c.notstart++;
   });
-  document.getElementById('cnt-total').textContent   = c.total;
-  document.getElementById('cnt-inprog').textContent  = c.inprog;
-  document.getElementById('cnt-done').textContent    = c.done;
+  document.getElementById('cnt-total').textContent    = c.total;
+  document.getElementById('cnt-inprog').textContent   = c.inprog;
+  document.getElementById('cnt-done').textContent     = c.done;
   document.getElementById('cnt-notstart').textContent = c.notstart;
-  document.getElementById('cnt-blocked').textContent = c.blocked;
+  document.getElementById('cnt-blocked').textContent  = c.blocked;
 }
 
 function populateFilters(rows) {
-  const wsEl    = document.getElementById('filter-ws');
-  const ownerEl = document.getElementById('filter-owner');
-  wsEl.innerHTML    = '<option value="">All Workstreams</option>';
-  ownerEl.innerHTML = '<option value="">All Owners</option>';
-
+  const wsEl = document.getElementById('filter-ws');
+  const owEl = document.getElementById('filter-owner');
+  wsEl.innerHTML = '<option value="">All Workstreams</option>';
+  owEl.innerHTML = '<option value="">All Owners</option>';
   [...new Set(rows.map(r => r['Workstream']))].forEach(ws => {
     const o = document.createElement('option');
     o.value = ws; o.textContent = (WS_ICONS[ws] || '') + ' ' + toTitle(ws);
@@ -470,7 +813,7 @@ function populateFilters(rows) {
   [...new Set(rows.map(r => r['Owner']).filter(Boolean))].forEach(ow => {
     const o = document.createElement('option');
     o.value = ow; o.textContent = ow;
-    ownerEl.appendChild(o);
+    owEl.appendChild(o);
   });
 }
 
@@ -494,14 +837,15 @@ function renderWorkstreams(rows) {
     div.className  = 'ws-group';
     div.dataset.ws = ws;
     div.innerHTML  = `
-      <div class="ws-header" onclick="toggleGroup(this)">
-        <span class="ws-icon">${icon}</span>
-        <span class="ws-title">${toTitle(ws)}</span>
-        <div class="ws-meta">
+      <div class="ws-header">
+        <span class="ws-icon" onclick="toggleGroupEl(this.closest('.ws-group'))">${icon}</span>
+        <span class="ws-title" onclick="toggleGroupEl(this.closest('.ws-group'))">${toTitle(ws)}</span>
+        <div class="ws-meta" onclick="toggleGroupEl(this.closest('.ws-group'))">
           <div class="ws-progress"><div class="ws-progress-fill" style="width:${pct}%"></div></div>
           <span class="ws-count">${done}/${tasks.length} done</span>
         </div>
-        <span class="ws-chevron">▼</span>
+        <button class="ws-add-btn" onclick="openAddModal('${esc(ws)}')">+ Add</button>
+        <span class="ws-chevron" onclick="toggleGroupEl(this.closest('.ws-group'))">▼</span>
       </div>
       <div class="ws-body">
         <table>
@@ -512,6 +856,7 @@ function renderWorkstreams(rows) {
               <th>Due</th>
               <th>Status</th>
               <th>Latest Update</th>
+              <th>Quick Update</th>
             </tr>
           </thead>
           <tbody>${tasks.map(renderRow).join('')}</tbody>
@@ -524,59 +869,259 @@ function renderWorkstreams(rows) {
 function renderRow(t) {
   const status  = t['Status'] || 'Not Started';
   const owner   = t['Owner']  || 'TBD';
-  const notes   = t['Notes']  || '';
-  const latest  = getLatestUpdate(t);
-  return `<tr data-status="${esc(status)}" data-owner="${esc(owner)}">
+  const email   = t['Owner Email'] || t['Email'] || '';
+  const latest  = t['Latest Update'] || getLatestWeekUpdate(t);
+  const due     = t['Due Date'] || '';
+  const rowIdx  = t._row;
+
+  const ownerHtml = email
+    ? `<a class="owner-chip" href="mailto:${esc(email)}" onclick="event.stopPropagation()" title="${esc(email)}">👤 ${esc(owner)}</a>`
+    : `<span class="owner-chip">👤 ${esc(owner)}</span>`;
+
+  return `<tr data-status="${esc(status)}" data-owner="${esc(owner)}" onclick="openEditModal(${rowIdx})">
     <td>
-      <div class="task-name">${esc(t['Task'])}</div>
-      ${notes ? `<div class="task-notes">${esc(notes)}</div>` : ''}
+      <div class="task-name">${esc(t['Task'] || t['Action'] || '')}</div>
+      ${t['Notes'] ? `<div class="task-notes">${esc(t['Notes'])}</div>` : ''}
     </td>
-    <td><span class="owner-chip">👤 ${esc(owner)}</span></td>
-    <td><span class="due-date ${dueDateClass(t['Due Date'])}">${esc(t['Due Date'] || '—')}</span></td>
+    <td>${ownerHtml}</td>
+    <td><span class="due-date ${dueDateClass(due)}">${due ? formatDue(due) : '—'}</span></td>
     <td><span class="badge ${statusClass(status)}">${esc(status)}</span></td>
     <td><span class="weekly-update${latest ? '' : ' empty'}">${latest ? esc(latest) : '—'}</span></td>
+    <td onclick="event.stopPropagation()">
+      <div class="quick-status">
+        <button class="qs-btn qs-wip${status==='In Progress'?' active':''}" onclick="quickStatus(${rowIdx},'In Progress',this)">WIP</button>
+        <button class="qs-btn qs-done${status==='Complete'?' active':''}" onclick="quickStatus(${rowIdx},'Complete',this)">✓</button>
+        <button class="qs-btn qs-blk${status==='Blocked'?' active':''}" onclick="quickStatus(${rowIdx},'Blocked',this)">⚠</button>
+      </div>
+    </td>
   </tr>`;
 }
 
+// ── QUICK STATUS ──
+async function quickStatus(rowIdx, newStatus, btn) {
+  if (!scriptUrl) { openSetupModal(); return; }
+  const row = allRows.find(r => r._row === rowIdx);
+  if (!row) return;
+
+  btn.closest('tr').querySelectorAll('.qs-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  btn.closest('tr').querySelector('.badge').className = 'badge ' + statusClass(newStatus);
+  btn.closest('tr').querySelector('.badge').textContent = newStatus;
+  row['Status'] = newStatus;
+  updateSummary(allRows);
+
+  await writeToSheet({ action: 'update', _row: rowIdx, data: { Status: newStatus } });
+}
+
+// ── EDIT MODAL ──
+function openEditModal(rowIdx) {
+  const row = allRows.find(r => r._row === rowIdx);
+  if (!row) return;
+  editingRow = row;
+
+  document.getElementById('modal-title').textContent = 'Edit Action';
+  document.getElementById('f-task').value   = row['Task'] || row['Action'] || '';
+  document.getElementById('f-owner').value  = row['Owner'] || '';
+  document.getElementById('f-email').value  = row['Owner Email'] || row['Email'] || '';
+  document.getElementById('f-update').value = row['Latest Update'] || '';
+
+  // Due date - try to parse existing value to yyyy-mm-dd for date input
+  const dueParsed = parseDateToISO(row['Due Date'] || '');
+  document.getElementById('f-due').value = dueParsed;
+
+  populateWsDropdown(row['Workstream'] || '');
+  selectStatus(row['Status'] || 'Not Started');
+  document.getElementById('save-status').textContent = '';
+  document.getElementById('save-status').className = 'save-status';
+  updateSetupUI();
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function openAddModal(ws) {
+  editingRow = null;
+  document.getElementById('modal-title').textContent = 'Add New Action';
+  document.getElementById('f-task').value   = '';
+  document.getElementById('f-owner').value  = '';
+  document.getElementById('f-email').value  = '';
+  document.getElementById('f-update').value = '';
+  document.getElementById('f-due').value    = '';
+  populateWsDropdown(ws || '');
+  selectStatus('Not Started');
+  document.getElementById('save-status').textContent = '';
+  document.getElementById('save-status').className = 'save-status';
+  updateSetupUI();
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function populateWsDropdown(selected) {
+  const sel = document.getElementById('f-ws');
+  sel.innerHTML = '';
+  const workstreams = [...new Set(allRows.map(r => r['Workstream']).filter(Boolean))];
+  if (!workstreams.length) {
+    const allWs = Object.keys(WS_ICONS);
+    allWs.forEach(ws => { const o = document.createElement('option'); o.value = ws; o.textContent = toTitle(ws); sel.appendChild(o); });
+  } else {
+    workstreams.forEach(ws => { const o = document.createElement('option'); o.value = ws; o.textContent = (WS_ICONS[ws]||'') + ' ' + toTitle(ws); if (ws === selected) o.selected = true; sel.appendChild(o); });
+  }
+}
+
+function selectStatus(s) {
+  selectedStatus = s;
+  document.querySelectorAll('.sp-btn').forEach(b => b.classList.remove('selected'));
+  const map = { 'Not Started': 'sp-ns', 'In Progress': 'sp-wip', 'Complete': 'sp-done', 'Blocked': 'sp-blk' };
+  document.querySelector('.' + (map[s] || 'sp-ns'))?.classList.add('selected');
+}
+
+function closeModal() {
+  document.getElementById('edit-modal').classList.remove('open');
+  editingRow = null;
+}
+
+// ── SAVE ──
+async function saveModal() {
+  if (!scriptUrl) { openSetupModal(); return; }
+
+  const task  = document.getElementById('f-task').value.trim();
+  const ws    = document.getElementById('f-ws').value;
+  const owner = document.getElementById('f-owner').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+  const due   = formatDueForSheet(document.getElementById('f-due').value);
+  const update= document.getElementById('f-update').value.trim();
+
+  if (!task) { document.getElementById('f-task').focus(); return; }
+
+  const saveBtn = document.getElementById('save-btn');
+  const statusEl = document.getElementById('save-status');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+  statusEl.textContent = '';
+
+  const data = { Task: task, Workstream: ws, Owner: owner, 'Owner Email': email,
+                 'Due Date': due, Status: selectedStatus, 'Latest Update': update };
+
+  try {
+    if (editingRow) {
+      await writeToSheet({ action: 'update', _row: editingRow._row, data });
+      Object.assign(editingRow, data);
+    } else {
+      await writeToSheet({ action: 'add', data });
+      await loadData();
+    }
+    statusEl.textContent = '✓ Saved';
+    statusEl.className = 'save-status ok';
+    if (editingRow) {
+      renderAll(allRows);
+      setTimeout(closeModal, 800);
+    } else {
+      closeModal();
+    }
+  } catch (e) {
+    statusEl.textContent = '⚠ Save failed — check Apps Script URL';
+    statusEl.className = 'save-status err';
+  }
+
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save Changes';
+}
+
+async function writeToSheet(payload) {
+  if (!scriptUrl) throw new Error('No script URL');
+  await fetch(scriptUrl, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+// ── SETUP MODAL ──
+function openSetupModal() {
+  document.getElementById('script-url-input').value = scriptUrl;
+  document.getElementById('setup-modal').classList.add('open');
+}
+function closeSetupModal() {
+  document.getElementById('setup-modal').classList.remove('open');
+}
+function saveScriptUrl() {
+  const url = document.getElementById('script-url-input').value.trim();
+  if (!url || !url.startsWith('https://script.google.com')) {
+    alert('Please paste a valid Apps Script URL (starts with https://script.google.com)');
+    return;
+  }
+  scriptUrl = url;
+  localStorage.setItem('sssio_script_url', url);
+  closeSetupModal();
+  updateSetupUI();
+  loadData();
+}
+
 // ── HELPERS ──
-function getLatestUpdate(t) {
+function getLatestWeekUpdate(t) {
   for (const w of ['Week of Jul 19','Week of Jul 12','Week of Jul 5','Week of Jun 28']) {
     if (t[w] && t[w].trim()) return t[w].trim();
   }
   return '';
 }
+
 function statusClass(s) {
-  const l = s.toLowerCase();
+  const l = (s||'').toLowerCase();
   if (l.includes('complete')) return 'badge-complete';
   if (l.includes('progress')) return 'badge-in-progress';
   if (l.includes('blocked'))  return 'badge-blocked';
   return 'badge-not-started';
 }
+
 function dueDateClass(d) {
   if (!d) return 'due-ok';
-  const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-  const [mon, day] = d.split(' ');
-  const m = months[mon]; const dd = parseInt(day);
-  if (isNaN(m) || isNaN(dd)) return 'due-ok';
-  const due = new Date(2026, m, dd);
-  const diff = (due - new Date()) / 86400000;
+  const date = new Date(d);
+  if (isNaN(date)) return 'due-ok';
+  const diff = (date - new Date()) / 86400000;
   if (diff < 0)  return 'due-overdue';
   if (diff <= 5) return 'due-soon';
   return 'due-ok';
 }
+
+function formatDue(d) {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (isNaN(date)) return d;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function parseDateToISO(d) {
+  if (!d) return '';
+  // try yyyy-mm-dd
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  // try "Jul 29" style
+  const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const m = d.match(/^([A-Za-z]+)\s+(\d+)$/);
+  if (m && months[m[1]] !== undefined) {
+    return `2026-${String(months[m[1]]+1).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
+  }
+  const date = new Date(d);
+  if (!isNaN(date)) return date.toISOString().slice(0,10);
+  return '';
+}
+
+function formatDueForSheet(iso) {
+  if (!iso) return '';
+  const date = new Date(iso + 'T00:00:00');
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 function toTitle(s) {
   return s.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
 }
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-function toggleGroup(h) { h.closest('.ws-group').classList.toggle('collapsed'); }
+function toggleGroupEl(el) { el.classList.toggle('collapsed'); }
 
 // ── FILTERS ──
 function applyFilters() {
-  const wsF  = document.getElementById('filter-ws').value;
-  const stF  = document.getElementById('filter-status').value;
-  const owF  = document.getElementById('filter-owner').value;
+  const wsF = document.getElementById('filter-ws').value;
+  const stF = document.getElementById('filter-status').value;
+  const owF = document.getElementById('filter-owner').value;
   document.querySelectorAll('.ws-group').forEach(group => {
     if (wsF && group.dataset.ws !== wsF) { group.classList.add('hidden-ws'); return; }
     group.classList.remove('hidden-ws');
@@ -593,6 +1138,10 @@ function resetFilters() {
   ['filter-ws','filter-status','filter-owner'].forEach(id => document.getElementById(id).value = '');
   applyFilters();
 }
+
+// close modals on backdrop click
+document.getElementById('edit-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+document.getElementById('setup-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeSetupModal(); });
 </script>
 </body>
 </html>

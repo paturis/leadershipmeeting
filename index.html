@@ -242,9 +242,22 @@ body {
 }
 .ws-add-btn:hover { background: rgba(15,52,96,0.15); }
 
+/* ── WORKSTREAM OWNERS ── */
+.ws-owners { display:flex; align-items:center; gap:5px; flex-wrap:wrap; padding:6px 20px 10px; border-bottom:1px solid #f0f0f5; }
+.ws-owner-chip { display:inline-flex; align-items:center; gap:4px; background:#f0f4ff; color:#0f3460; border-radius:20px; padding:3px 9px; font-size:11px; font-weight:600; }
+.ws-owner-label { font-size:11px; color:#8e8e93; font-weight:500; }
+.ws-owner-edit { background:none; border:1px dashed #d1d1d6; color:#8e8e93; border-radius:20px; padding:3px 9px; font-size:11px; cursor:pointer; }
+.ws-owner-edit:hover { border-color:#0f3460; color:#0f3460; }
+
 /* ── TASK TABLE ── */
 .ws-body { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+col.col-task   { width: 35%; }
+col.col-owner  { width: 13%; }
+col.col-due    { width: 9%; }
+col.col-status { width: 12%; }
+col.col-update { width: 18%; }
+col.col-quick  { width: 13%; }
 thead th {
   background: #f8f8fb;
   padding: 9px 14px;
@@ -256,11 +269,13 @@ thead th {
   letter-spacing: 0.4px;
   border-bottom: 1px solid #f0f0f5;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 tbody tr { border-bottom: 1px solid #f7f7f9; transition: background 0.1s; }
 tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: #f0f4ff; cursor: pointer; }
-tbody td { padding: 11px 14px; vertical-align: middle; }
+tbody td { padding: 11px 14px; vertical-align: middle; overflow: hidden; }
 .task-name { font-weight: 500; color: #1d1d1f; line-height: 1.4; }
 .task-notes { font-size: 11px; color: #8e8e93; margin-top: 3px; line-height: 1.4; }
 .owner-chip {
@@ -525,7 +540,7 @@ tr.hidden-row { display: none; }
       <p>July 24–29, 2026 · Leadership Meeting</p>
     </div>
     <div class="header-right">
-      <button class="add-main-btn" onclick="openAddModal(null)">+ Add Action</button>
+      <button class="add-main-btn" onclick="openNewWorkstreamModal()">+ New Workstream</button>
       <button class="refresh-btn" onclick="openContactsModal()">👥 Contacts</button>
       <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
       <a class="sheet-link" id="sheet-link" href="https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit" target="_blank">📊 Sheet</a>
@@ -634,6 +649,58 @@ tr.hidden-row { display: none; }
       <span class="save-status" id="save-status"></span>
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
       <button class="btn-primary" id="save-btn" onclick="saveModal()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW WORKSTREAM MODAL -->
+<div class="modal-backdrop" id="new-ws-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h2>+ New Workstream</h2>
+      <button class="modal-close" onclick="document.getElementById('new-ws-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Workstream Name</label>
+        <input type="text" class="form-input" id="nws-name" placeholder="e.g. AV & Technology" />
+      </div>
+      <div class="form-group">
+        <label>Workstream Owner(s) <span style="font-weight:400;color:#8e8e93">(optional — add after creating)</span></label>
+        <input type="text" class="form-input" id="nws-owner" placeholder="Name" list="contacts-datalist" />
+        <input type="email" class="form-input" id="nws-email" placeholder="email@example.com" style="margin-top:8px" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="document.getElementById('new-ws-modal').classList.remove('open')">Cancel</button>
+      <button class="btn-primary" onclick="createWorkstream()">Create Workstream</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKSTREAM OWNERS MODAL -->
+<div class="modal-backdrop" id="ws-owners-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <h2 id="ws-owners-modal-title">👥 Workstream Owners</h2>
+      <button class="modal-close" onclick="closeWsOwnersModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" class="form-input" id="wso-name" placeholder="Full name" list="contacts-datalist" oninput="autofillWsEmail(this.value)" />
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" class="form-input" id="wso-email" placeholder="email@example.com" />
+        </div>
+      </div>
+      <button class="btn-primary" style="width:100%" onclick="addWsOwner()">+ Add Owner</button>
+      <div class="contacts-list" id="ws-owners-list" style="margin-top:12px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeWsOwnersModal()">Done</button>
     </div>
   </div>
 </div>
@@ -887,15 +954,18 @@ function renderWorkstreams(rows) {
           <span class="ws-count">${done}/${tasks.length} done</span>
         </div>
         <button class="ws-add-btn" onclick="openUpdatesModal('${esc(ws)}')" style="background:rgba(15,52,96,0.05)">📋 Updates</button>
+        <button class="ws-add-btn" onclick="openWsOwnersModal('${esc(ws)}')">👥 Owners</button>
         <button class="ws-add-btn" onclick="openAddModal('${esc(ws)}')">+ Add Task</button>
         <span class="ws-chevron" onclick="toggleGroupEl(this.closest('.ws-group'))">▼</span>
       </div>
+      <div class="ws-owners" id="ws-owners-${esc(ws)}">${renderWsOwners(ws)}</div>
       <div class="ws-body">
         <table>
+          <colgroup><col class="col-task"><col class="col-owner"><col class="col-due"><col class="col-status"><col class="col-update"><col class="col-quick"></colgroup>
           <thead>
             <tr>
-              <th style="min-width:240px">Task</th>
-              <th>Owner</th>
+              <th>Task</th>
+              <th>Owner(s)</th>
               <th>Due</th>
               <th>Status</th>
               <th>Latest Update</th>
@@ -1244,6 +1314,114 @@ document.getElementById('edit-modal').addEventListener('click', e => { if (e.tar
 document.getElementById('setup-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeSetupModal(); });
 document.getElementById('contacts-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeContactsModal(); });
 document.getElementById('updates-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeUpdatesModal(); });
+
+// ── WORKSTREAM OWNERS ──
+let currentWsOwners = null;
+
+function loadWsOwners() {
+  return JSON.parse(localStorage.getItem('sssio_ws_owners') || '{}');
+}
+function saveWsOwners(data) {
+  localStorage.setItem('sssio_ws_owners', JSON.stringify(data));
+}
+function renderWsOwners(ws) {
+  const all = loadWsOwners();
+  const owners = (all[ws] || []);
+  if (!owners.length) return '<span class="ws-owner-label">Workstream Owners:</span><button class="ws-owner-edit" onclick="openWsOwnersModal(\''+esc(ws)+'\')">+ Add owners</button>';
+  return '<span class="ws-owner-label">Owners:</span>' +
+    owners.map(o => `<span class="ws-owner-chip" title="${esc(o.email)}">👤 ${esc(o.name)}</span>`).join('') +
+    `<button class="ws-owner-edit" onclick="openWsOwnersModal('${esc(ws)}')">✏️ Edit</button>`;
+}
+function openWsOwnersModal(ws) {
+  currentWsOwners = ws;
+  document.getElementById('ws-owners-modal-title').textContent = '👥 Owners — ' + toTitle(ws);
+  document.getElementById('wso-name').value = '';
+  document.getElementById('wso-email').value = '';
+  renderWsOwnersList();
+  document.getElementById('ws-owners-modal').classList.add('open');
+}
+function closeWsOwnersModal() {
+  document.getElementById('ws-owners-modal').classList.remove('open');
+  // refresh display in workstream header
+  if (currentWsOwners) {
+    const el = document.getElementById('ws-owners-' + currentWsOwners);
+    if (el) el.innerHTML = renderWsOwners(currentWsOwners);
+  }
+  currentWsOwners = null;
+}
+function autofillWsEmail(name) {
+  const contact = loadContacts().find(c => c.name.toLowerCase() === name.toLowerCase());
+  if (contact) document.getElementById('wso-email').value = contact.email;
+}
+function addWsOwner() {
+  const name  = document.getElementById('wso-name').value.trim();
+  const email = document.getElementById('wso-email').value.trim();
+  if (!name) return;
+  const all = loadWsOwners();
+  if (!all[currentWsOwners]) all[currentWsOwners] = [];
+  if (!all[currentWsOwners].find(o => o.name === name)) {
+    all[currentWsOwners].push({ name, email });
+    saveWsOwners(all);
+    if (name && email) autoSaveContact(name, email);
+  }
+  document.getElementById('wso-name').value = '';
+  document.getElementById('wso-email').value = '';
+  renderWsOwnersList();
+}
+function removeWsOwner(name) {
+  const all = loadWsOwners();
+  if (all[currentWsOwners]) {
+    all[currentWsOwners] = all[currentWsOwners].filter(o => o.name !== name);
+    saveWsOwners(all);
+  }
+  renderWsOwnersList();
+}
+function renderWsOwnersList() {
+  const all = loadWsOwners();
+  const owners = all[currentWsOwners] || [];
+  const list = document.getElementById('ws-owners-list');
+  if (!owners.length) {
+    list.innerHTML = '<div class="no-updates">No owners assigned yet.</div>';
+    return;
+  }
+  list.innerHTML = owners.map(o => `
+    <div class="contact-row">
+      <div class="contact-avatar">${esc(o.name.charAt(0).toUpperCase())}</div>
+      <div class="contact-info">
+        <div class="contact-name">${esc(o.name)}</div>
+        <div class="contact-email">${esc(o.email || '—')}</div>
+      </div>
+      <button class="contact-del" onclick="removeWsOwner('${esc(o.name)}')">✕</button>
+    </div>`).join('');
+}
+
+// ── NEW WORKSTREAM ──
+function openNewWorkstreamModal() {
+  document.getElementById('nws-name').value = '';
+  document.getElementById('nws-owner').value = '';
+  document.getElementById('nws-email').value = '';
+  document.getElementById('new-ws-modal').classList.add('open');
+}
+function createWorkstream() {
+  const name  = document.getElementById('nws-name').value.trim().toUpperCase();
+  const owner = document.getElementById('nws-owner').value.trim();
+  const email = document.getElementById('nws-email').value.trim();
+  if (!name) { document.getElementById('nws-name').focus(); return; }
+  // Save owner if provided
+  if (owner) {
+    const all = loadWsOwners();
+    if (!all[name]) all[name] = [];
+    all[name].push({ name: owner, email });
+    saveWsOwners(all);
+    if (owner && email) autoSaveContact(owner, email);
+  }
+  document.getElementById('new-ws-modal').classList.remove('open');
+  // Open add task modal pre-filled with new workstream
+  openAddModal(name);
+}
+
+document.getElementById('new-ws-modal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
+document.getElementById('ws-owners-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeWsOwnersModal(); });
 
 // ── CONTACTS ──
 function loadContacts() {

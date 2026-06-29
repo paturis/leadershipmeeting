@@ -888,6 +888,7 @@ const WS_ICONS = {
   'BUDGET': '💰', 'DEVOTIONAL PLANNING': '🙏', 'DEVOTIONAL PROGRAM': '🙏',
   'COMMUNICATIONS': '📢', 'TRACKER': '📊',
   'HOSPITALITY': '🏨', 'SET UP': '🔧', 'LOGISTICS': '🚛', 'AV SET UP': '🎥',
+  'IT': '💻', 'ADMIN': '🚀',
 };
 // Display-name overrides — renames old sheet values without touching the sheet
 const WS_RENAME = {
@@ -1218,7 +1219,10 @@ function openAddModal(ws) {
 function populateWsDropdown(selected) {
   const sel = document.getElementById('f-ws');
   sel.innerHTML = '';
-  const workstreams = [...new Set(allRows.map(r => r['Workstream']).filter(Boolean))];
+  const workstreams = [...new Set([
+    ...allRows.map(r => r['Workstream']).filter(Boolean),
+    ...loadPendingWorkstreams()
+  ])];
   const list = workstreams.length ? workstreams : Object.keys(WS_ICONS);
   list.forEach(ws => {
     const o = document.createElement('option');
@@ -1453,7 +1457,8 @@ function formatDueForSheet(iso) {
 function toTitle(s) {
   const up = (s || '').toUpperCase();
   if (WS_RENAME[up]) return WS_RENAME[up];
-  return s.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+  // Preserve words that are all-caps acronyms (e.g. IT, AV, TV)
+  return s.split(' ').map(w => /^[A-Z]+$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 }
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

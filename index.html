@@ -241,6 +241,49 @@ body {
   white-space: nowrap;
 }
 .ws-add-btn:hover { background: rgba(15,52,96,0.15); }
+.ws-add-btn.accent { background: rgba(15,52,96,0.12); border: 1px solid rgba(15,52,96,0.25); }
+.ws-add-btn.accent:hover { background: rgba(15,52,96,0.2); }
+.ws-more-btn {
+  background: none;
+  border: 1px solid #d1d1d6;
+  color: #6e6e73;
+  width: 30px; height: 30px;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+  position: relative;
+}
+.ws-more-btn:hover { background: #f2f2f7; border-color: #aeaeb2; color: #1a1a2e; }
+.ws-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: white;
+  border: 0.5px solid #d1d1d6;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 170px;
+  z-index: 200;
+  padding: 4px;
+  display: none;
+}
+.ws-dropdown.open { display: block; }
+.ws-dropdown-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1a1a2e;
+  cursor: pointer;
+  white-space: nowrap;
+  background: none; border: none; width: 100%; text-align: left;
+}
+.ws-dropdown-item:hover { background: #f2f2f7; }
+.ws-dropdown-item.danger { color: #ff3b30; }
+.ws-dropdown-item.danger:hover { background: #fff1f0; }
+.ws-dropdown-divider { height: 0.5px; background: #e9ecef; margin: 4px 0; }
 
 /* ── WORKSTREAM OWNERS ── */
 .ws-owners { display:flex; align-items:center; gap:5px; flex-wrap:wrap; padding:6px 20px 10px; border-bottom:1px solid #f0f0f5; }
@@ -1016,11 +1059,17 @@ function renderWorkstreams(rows) {
           <div class="ws-progress"><div class="ws-progress-fill" style="width:${pct}%"></div></div>
           <span class="ws-count">${done}/${tasks.length} done</span>
         </div>
-        <button class="ws-add-btn" onclick="openUpdatesModal('${esc(ws)}')" style="background:rgba(15,52,96,0.05)">📋 Updates</button>
-        ${isAdmin() ? `<button class="ws-add-btn" onclick="openEmailModal('${esc(ws)}')">✉️ Email</button>` : ''}
-        ${isAdmin() ? `<button class="ws-add-btn" onclick="openWsOwnersModal('${esc(ws)}')">👥 Owners</button>` : ''}
-        ${isAdmin() ? `<button class="ws-add-btn" onclick="startRenameWs('${esc(ws)}', this)">✏️ Rename</button>` : ''}
-        ${isAdmin() ? `<button class="ws-add-btn" onclick="openAddModal('${esc(ws)}')">+ Add Task</button>` : ''}
+        <button class="ws-add-btn" onclick="event.stopPropagation();openUpdatesModal('${esc(ws)}')">📋 Updates</button>
+        ${isAdmin() ? `<button class="ws-add-btn accent" onclick="event.stopPropagation();openAddModal('${esc(ws)}')">+ Add task</button>` : ''}
+        ${isAdmin() ? `
+        <div style="position:relative" onclick="event.stopPropagation()">
+          <button class="ws-more-btn" onclick="toggleWsMenu(this)" aria-label="More actions">⋯</button>
+          <div class="ws-dropdown">
+            <button class="ws-dropdown-item" onclick="closeWsMenus();openEmailModal('${esc(ws)}')">✉️ Email team</button>
+            <button class="ws-dropdown-item" onclick="closeWsMenus();openWsOwnersModal('${esc(ws)}')">👥 Manage owners</button>
+            <button class="ws-dropdown-item" onclick="closeWsMenus();startRenameWs('${esc(ws)}', this.closest('.ws-group').querySelector('.ws-title'))">✏️ Rename</button>
+          </div>
+        </div>` : ''}
         <span class="ws-chevron" onclick="toggleGroupEl(this.closest('.ws-group'))">▼</span>
       </div>
       <div class="ws-owners" id="ws-owners-${esc(ws)}">${renderWsOwners(ws)}</div>
@@ -1394,10 +1443,19 @@ function esc(s) {
 }
 function toggleGroupEl(el) { el.classList.toggle('collapsed'); }
 
+function toggleWsMenu(btn) {
+  const dropdown = btn.nextElementSibling;
+  const isOpen = dropdown.classList.contains('open');
+  closeWsMenus();
+  if (!isOpen) dropdown.classList.add('open');
+}
+function closeWsMenus() {
+  document.querySelectorAll('.ws-dropdown.open').forEach(d => d.classList.remove('open'));
+}
+document.addEventListener('click', closeWsMenus);
+
 // ── RENAME WORKSTREAM ──
-function startRenameWs(ws, btn) {
-  const group = btn.closest('.ws-group');
-  const titleEl = group.querySelector('.ws-title');
+function startRenameWs(ws, titleEl) {
   const currentDisplay = toTitle(ws);
 
   // Replace title span with inline input

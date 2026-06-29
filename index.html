@@ -1649,6 +1649,42 @@ function copyScript() {
   });
 }
 
+// ── SEED CONTACTS ──
+const SEED_CONTACTS = [
+  { name: 'Anupom Ganguli',         email: 'aganguli@sathyasai.org' },
+  { name: 'Nilesh Patel',           email: 'npatel@sathyasai.us' },
+  { name: 'Nilesh Patel',           email: 'npatel@sathyasai.org' },
+  { name: 'Harish Naidu',           email: 'hnaidu@sathyasai.us' },
+  { name: 'Siva Paturi',            email: 'siva.paturi@gmail.com' },
+  { name: 'Siva Paturi',            email: 'spaturi@sathyasai.us' },
+  { name: 'Alejandro (Alex) Grana', email: 'agrana@sathyasai.us' },
+  { name: 'Grana Alex',             email: 'grana_alejandro@yahoo.com' },
+  { name: 'Srinivas Nukala',        email: 'srinivas.nukala@gmail.com' },
+  { name: 'Anuruddha Perera',       email: 'masacontracting@gmail.com' },
+  { name: 'Anuruddha Perera',       email: 'anuruddha.service@gmail.com' },
+  { name: 'Rashmi Devnani',         email: 'rashu_chawla@hotmail.com' },
+  { name: 'Pragnya Alekal',         email: 'pragzz@gmail.com' },
+  { name: 'Natubhai Patel',         email: 'Circlea15677@yahoo.com' },
+  { name: 'Seema Miller',           email: 'seema@idiotsavant.com' },
+  { name: 'Leslie Farkas',          email: 'weprema@gmail.com' },
+  { name: 'Seshu Alla',             email: 'seshualla@yahoo.com' },
+  { name: 'Rattan Appoo',           email: 'rattanjal@gmail.com' },
+];
+function seedContacts() {
+  const existing = loadContacts();
+  const existingEmails = new Set(existing.map(c => c.email.toLowerCase()));
+  let changed = false;
+  SEED_CONTACTS.forEach(c => {
+    if (!existingEmails.has(c.email.toLowerCase())) {
+      existing.push(c);
+      existingEmails.add(c.email.toLowerCase());
+      changed = true;
+    }
+  });
+  if (changed) saveContacts(existing);
+}
+seedContacts();
+
 // init
 refreshDatalist();
 </script>

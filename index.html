@@ -963,6 +963,28 @@ async function loadData() {
       const json = await res.json();
       rows = json.rows;
       headers = json.headers;
+      // Sync contacts from sheet (merge: keep any local-only entries)
+      if (json.contacts) {
+        const sheetContacts = json.contacts;
+        const local = loadContacts();
+        const merged = [...sheetContacts];
+        local.forEach(lc => {
+          if (!merged.find(m => m.email.toLowerCase() === lc.email.toLowerCase()))
+            merged.push(lc);
+        });
+        localStorage.setItem('sssio_contacts', JSON.stringify(merged));
+        refreshDatalist();
+        // If local had extras not in sheet, push them up
+        if (merged.length > sheetContacts.length) syncContactsToSheet();
+      }
+      // Sync wsOwners from sheet (sheet is authoritative)
+      if (json.wsOwners) {
+        // Merge: keep any local keys not in sheet
+        const local = loadWsOwners();
+        const merged = { ...local, ...json.wsOwners };
+        localStorage.setItem('sssio_ws_owners', JSON.stringify(merged));
+        if (Object.keys(json.wsOwners).length < Object.keys(merged).length) syncWsOwnersToSheet();
+      }
     } else {
       const res = await fetch(CSV_URL + '&t=' + Date.now());
       const text = await res.text();
@@ -1658,6 +1680,11 @@ function loadWsOwners() {
 }
 function saveWsOwners(data) {
   localStorage.setItem('sssio_ws_owners', JSON.stringify(data));
+  syncWsOwnersToSheet();
+}
+function syncWsOwnersToSheet() {
+  if (!scriptUrl) return;
+  writeToSheet({ action: 'saveWsOwners', wsOwners: loadWsOwners() }).catch(() => {});
 }
 function renderWsOwners(ws) {
   const all = loadWsOwners();
@@ -1768,6 +1795,11 @@ function loadContacts() {
 function saveContacts(contacts) {
   localStorage.setItem('sssio_contacts', JSON.stringify(contacts));
   refreshDatalist();
+  syncContactsToSheet();
+}
+function syncContactsToSheet() {
+  if (!scriptUrl) return;
+  writeToSheet({ action: 'saveContacts', contacts: loadContacts() }).catch(() => {});
 }
 function refreshDatalist() {
   const dl = document.getElementById('contacts-datalist');
@@ -1908,6 +1940,9 @@ const TRACKER_URL  = 'https://paturis.github.io/leadershipmeeting/';
 const TRACKER_PASS = 'SaiRam2026';
 
 function doGet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Tracker rows
   const sheet = getSheet();
   const data = sheet.getDataRange().getValues();
   const headers = data[0].map(String);
@@ -1916,7 +1951,32 @@ function doGet() {
     headers.forEach((h, j) => { obj[h] = String(row[j] || ''); });
     return obj;
   }).filter(r => r['Workstream'] && r['Workstream'].trim());
-  const out = ContentService.createTextOutput(JSON.stringify({ headers, rows }));
+
+  // Contacts
+  var contacts = [];
+  var cSheet = ss.getSheetByName('Contacts');
+  if (cSheet && cSheet.getLastRow() > 1) {
+    var cData = cSheet.getDataRange().getValues();
+    cData.slice(1).forEach(function(row) {
+      if (row[0] && row[1]) contacts.push({ name: String(row[0]), email: String(row[1]) });
+    });
+  }
+
+  // WS Owners
+  var wsOwners = {};
+  var wSheet = ss.getSheetByName('WS Owners');
+  if (wSheet && wSheet.getLastRow() > 1) {
+    var wData = wSheet.getDataRange().getValues();
+    wData.slice(1).forEach(function(row) {
+      var ws = String(row[0] || ''), name = String(row[1] || ''), email = String(row[2] || '');
+      if (ws && name) {
+        if (!wsOwners[ws]) wsOwners[ws] = [];
+        wsOwners[ws].push({ name: name, email: email });
+      }
+    });
+  }
+
+  const out = ContentService.createTextOutput(JSON.stringify({ headers, rows, contacts, wsOwners }));
   out.setMimeType(ContentService.MimeType.JSON);
   return out;
 }
@@ -1945,6 +2005,22 @@ function doPost(e) {
 
   } else if (payload.action === 'delete') {
     sheet.deleteRow(payload._row);
+
+  } else if (payload.action === 'saveContacts') {
+    var ss2 = SpreadsheetApp.getActiveSpreadsheet();
+    var cSheet = ss2.getSheetByName('Contacts') || ss2.insertSheet('Contacts');
+    cSheet.clearContents();
+    cSheet.appendRow(['Name', 'Email']);
+    (payload.contacts || []).forEach(function(c) { cSheet.appendRow([c.name, c.email]); });
+
+  } else if (payload.action === 'saveWsOwners') {
+    var ss3 = SpreadsheetApp.getActiveSpreadsheet();
+    var wSheet = ss3.getSheetByName('WS Owners') || ss3.insertSheet('WS Owners');
+    wSheet.clearContents();
+    wSheet.appendRow(['Workstream', 'Name', 'Email']);
+    Object.entries(payload.wsOwners || {}).forEach(function([ws, owners]) {
+      owners.forEach(function(o) { wSheet.appendRow([ws, o.name, o.email]); });
+    });
 
   } else if (payload.action === 'renameWorkstream') {
     const wsCol = headers.indexOf('Workstream');

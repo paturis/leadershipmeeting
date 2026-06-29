@@ -698,88 +698,8 @@ tr.hidden-row { display: none; }
 
       <div class="step"><span class="step-num">1</span><span>Open your <a href="https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit" target="_blank" style="color:#0f3460;font-weight:600">Google Sheet</a>, go to <strong>Extensions → Apps Script</strong></span></div>
       <div class="step"><span class="step-num">2</span><span>Delete any existing code, paste the script below, and click <strong>Save</strong></span></div>
-      <div class="setup-code" id="apps-script-code">// SSSIO Tracker — Apps Script Web App
-// Paste this in Extensions → Apps Script, then Deploy → New deployment
-
-const SHEET_NAME     = 'Tracker'; // sheet tab name
-const TRACKER_URL    = 'https://paturis.github.io/leadershipmeeting/';
-const TRACKER_PASS   = 'SaiRam2026';
-
-function doGet() {
-  const sheet = getSheet();
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0].map(String);
-  const rows = data.slice(1).map((row, i) => {
-    const obj = { _row: i + 2 };
-    headers.forEach((h, j) => { obj[h] = String(row[j] || ''); });
-    return obj;
-  }).filter(r => r['Workstream'] && r['Workstream'].trim());
-  const out = ContentService.createTextOutput(JSON.stringify({ headers, rows }));
-  out.setMimeType(ContentService.MimeType.JSON);
-  return out;
-}
-
-function doPost(e) {
-  const sheet = getSheet();
-  const payload = JSON.parse(e.postData.contents);
-  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
-
-  if (payload.action === 'update') {
-    Object.entries(payload.data).forEach(([key, val]) => {
-      const col = headers.indexOf(key);
-      if (col >= 0) sheet.getRange(payload._row, col + 1).setValue(val);
-    });
-    if (payload.notify && payload.data['Owner Email']) {
-      sendEmail(payload.data['Owner Email'], payload.data['Owner'] || '',
-                payload.data['Task'] || '', payload.data);
-    }
-  } else if (payload.action === 'add') {
-    sheet.appendRow(headers.map(h => payload.data[h] || ''));
-    if (payload.notify && payload.data['Owner Email']) {
-      sendEmail(payload.data['Owner Email'], payload.data['Owner'] || '',
-                payload.data['Task'] || '', payload.data);
-    }
-  }
-
-  const out = ContentService.createTextOutput(JSON.stringify({ ok: true }));
-  out.setMimeType(ContentService.MimeType.JSON);
-  return out;
-}
-
-function sendEmail(toEmail, ownerName, taskName, task) {
-  const subject = '[SSSIO Conference] Task assigned: ' + taskName;
-  const htmlBody =
-    '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#f5f5f7;padding:24px;">' +
-    '<div style="background:linear-gradient(135deg,#1a1a2e,#0f3460);border-radius:12px 12px 0 0;padding:24px 28px;text-align:center;">' +
-    '<div style="font-size:32px;margin-bottom:8px;">&#x1F549;</div>' +
-    '<h1 style="color:white;font-size:18px;margin:0;">SSSIO Leadership Conference</h1>' +
-    '<p style="color:rgba(255,255,255,0.7);font-size:13px;margin:4px 0 0;">July 24–29, 2026</p>' +
-    '</div>' +
-    '<div style="background:white;border-radius:0 0 12px 12px;padding:28px;">' +
-    '<p style="font-size:15px;color:#1d1d1f;margin-bottom:20px;">Sairam dear <strong>' + (ownerName || 'Volunteer') + '</strong>,</p>' +
-    '<p style="font-size:14px;color:#3c3c43;margin-bottom:24px;">You have been assigned a task for the SSSIO Leadership Conference. Please log in to the tracker to update your progress.</p>' +
-    '<div style="background:#f8f8fb;border-radius:10px;padding:18px 20px;margin-bottom:24px;border-left:4px solid #0f3460;">' +
-    '<table style="font-size:13px;color:#1d1d1f;width:100%;border-collapse:collapse;">' +
-    '<tr><td style="padding:5px 0;color:#6e6e73;width:110px;">Task</td><td style="padding:5px 0;font-weight:600;">' + (task['Task'] || taskName) + '</td></tr>' +
-    '<tr><td style="padding:5px 0;color:#6e6e73;">Workstream</td><td style="padding:5px 0;">' + (task['Workstream'] || '') + '</td></tr>' +
-    '<tr><td style="padding:5px 0;color:#6e6e73;">Due Date</td><td style="padding:5px 0;">' + (task['Due Date'] || 'TBD') + '</td></tr>' +
-    '<tr><td style="padding:5px 0;color:#6e6e73;">Status</td><td style="padding:5px 0;">' + (task['Status'] || 'Not Started') + '</td></tr>' +
-    (task['Latest Update'] ? '<tr><td style="padding:5px 0;color:#6e6e73;">Notes</td><td style="padding:5px 0;">' + task['Latest Update'] + '</td></tr>' : '') +
-    '</table></div>' +
-    '<div style="text-align:center;margin-bottom:24px;">' +
-    '<a href="' + TRACKER_URL + '" style="background:#0f3460;color:white;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;display:inline-block;">Open Tracker</a>' +
-    '</div>' +
-    '<p style="font-size:12px;color:#8e8e93;text-align:center;margin-bottom:4px;">Password: <strong style="color:#1d1d1f;">' + TRACKER_PASS + '</strong></p>' +
-    '<hr style="border:none;border-top:1px solid #f0f0f5;margin:20px 0;">' +
-    '<p style="font-size:13px;color:#6e6e73;text-align:center;margin:0;">Jai Sai Ram &#x1F549;</p>' +
-    '</div></div>';
-  GmailApp.sendEmail(toEmail, subject, '', { htmlBody: htmlBody });
-}
-
-function getSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  return ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
-}</div>
+      <textarea id="apps-script-code" readonly style="width:100%;height:260px;font-family:monospace;font-size:12px;background:#1a1a2e;color:#a5f3a5;border-radius:10px;padding:14px 16px;border:none;resize:none;line-height:1.6;outline:none;" onclick="this.select()"></textarea>
+      <button onclick="copyScript()" style="margin-top:8px;width:100%;padding:9px;background:#0f3460;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📋 Copy Script</button>
 
       <div class="step" style="margin-top:12px"><span class="step-num">3</span><span>Click <strong>Deploy → New deployment</strong> → type: <strong>Web app</strong> → Execute as: <strong>Me</strong> → Who has access: <strong>Anyone</strong> → Deploy</span></div>
       <div class="step"><span class="step-num">4</span><span>Copy the <strong>Web app URL</strong> and paste it below, then click Save</span></div>
@@ -1195,10 +1115,6 @@ async function writeToSheet(payload) {
 }
 
 // ── SETUP MODAL ──
-function openSetupModal() {
-  document.getElementById('script-url-input').value = scriptUrl;
-  document.getElementById('setup-modal').classList.add('open');
-}
 function closeSetupModal() {
   document.getElementById('setup-modal').classList.remove('open');
 }
@@ -1433,6 +1349,108 @@ function openUpdatesModal(ws) {
 }
 function closeUpdatesModal() {
   document.getElementById('updates-modal').classList.remove('open');
+}
+
+// ── APPS SCRIPT CODE ──
+const APPS_SCRIPT_CODE = `// SSSIO Tracker — Apps Script Web App
+// Paste this in Extensions → Apps Script, then Deploy → New deployment
+
+const SHEET_NAME  = 'Tracker';
+const TRACKER_URL = 'https://paturis.github.io/leadershipmeeting/';
+const TRACKER_PASS = 'SaiRam2026';
+
+function doGet() {
+  const sheet = getSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0].map(String);
+  const rows = data.slice(1).map((row, i) => {
+    const obj = { _row: i + 2 };
+    headers.forEach((h, j) => { obj[h] = String(row[j] || ''); });
+    return obj;
+  }).filter(r => r['Workstream'] && r['Workstream'].trim());
+  const out = ContentService.createTextOutput(JSON.stringify({ headers, rows }));
+  out.setMimeType(ContentService.MimeType.JSON);
+  return out;
+}
+
+function doPost(e) {
+  const sheet = getSheet();
+  const payload = JSON.parse(e.postData.contents);
+  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+  if (payload.action === 'update') {
+    Object.entries(payload.data).forEach(([key, val]) => {
+      const col = headers.indexOf(key);
+      if (col >= 0) sheet.getRange(payload._row, col + 1).setValue(val);
+    });
+    if (payload.notify && payload.data['Owner Email']) {
+      sendEmail(payload.data['Owner Email'], payload.data['Owner'] || '',
+                payload.data['Task'] || '', payload.data);
+    }
+  } else if (payload.action === 'add') {
+    sheet.appendRow(headers.map(h => payload.data[h] || ''));
+    if (payload.notify && payload.data['Owner Email']) {
+      sendEmail(payload.data['Owner Email'], payload.data['Owner'] || '',
+                payload.data['Task'] || '', payload.data);
+    }
+  }
+  const out = ContentService.createTextOutput(JSON.stringify({ ok: true }));
+  out.setMimeType(ContentService.MimeType.JSON);
+  return out;
+}
+
+function sendEmail(toEmail, ownerName, taskName, task) {
+  const subject = '[SSSIO Conference] Task assigned: ' + taskName;
+  const row = function(label, value) {
+    return '<tr><td style="padding:5px 0;color:#6e6e73;width:110px;">' + label +
+           '</td><td style="padding:5px 0;font-weight:600;">' + value + '</td></tr>';
+  };
+  const htmlBody =
+    '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#f5f5f7;padding:24px;">' +
+    '<div style="background:linear-gradient(135deg,#1a1a2e,#0f3460);border-radius:12px 12px 0 0;padding:24px 28px;text-align:center;">' +
+    '<div style="font-size:32px;margin-bottom:8px;">&#x1F549;</div>' +
+    '<h1 style="color:white;font-size:18px;margin:0;">SSSIO Leadership Conference</h1>' +
+    '<p style="color:rgba(255,255,255,0.7);font-size:13px;margin:4px 0 0;">July 24-29, 2026</p>' +
+    '</div>' +
+    '<div style="background:white;border-radius:0 0 12px 12px;padding:28px;">' +
+    '<p style="font-size:15px;color:#1d1d1f;margin-bottom:20px;">Sairam dear <strong>' + (ownerName || 'Volunteer') + '</strong>,</p>' +
+    '<p style="font-size:14px;color:#3c3c43;margin-bottom:24px;">You have been assigned a task for the SSSIO Leadership Conference. Please log in to the tracker to update your progress.</p>' +
+    '<div style="background:#f8f8fb;border-radius:10px;padding:18px 20px;margin-bottom:24px;border-left:4px solid #0f3460;">' +
+    '<table style="font-size:13px;color:#1d1d1f;width:100%;border-collapse:collapse;">' +
+    row('Task', task['Task'] || taskName) +
+    row('Workstream', task['Workstream'] || '') +
+    row('Due Date', task['Due Date'] || 'TBD') +
+    row('Status', task['Status'] || 'Not Started') +
+    (task['Latest Update'] ? row('Notes', task['Latest Update']) : '') +
+    '</table></div>' +
+    '<div style="text-align:center;margin-bottom:24px;">' +
+    '<a href="' + TRACKER_URL + '" style="background:#0f3460;color:white;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;display:inline-block;">Open Tracker</a>' +
+    '</div>' +
+    '<p style="font-size:12px;color:#8e8e93;text-align:center;margin-bottom:4px;">Password: <strong style="color:#1d1d1f;">' + TRACKER_PASS + '</strong></p>' +
+    '<hr style="border:none;border-top:1px solid #f0f0f5;margin:20px 0;">' +
+    '<p style="font-size:13px;color:#6e6e73;text-align:center;margin:0;">Jai Sai Ram &#x1F549;</p>' +
+    '</div></div>';
+  GmailApp.sendEmail(toEmail, subject, '', { htmlBody: htmlBody });
+}
+
+function getSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  return ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+}`;
+
+function openSetupModal() {
+  document.getElementById('script-url-input').value = scriptUrl;
+  document.getElementById('apps-script-code').value = APPS_SCRIPT_CODE;
+  document.getElementById('setup-modal').classList.add('open');
+}
+
+function copyScript() {
+  const ta = document.getElementById('apps-script-code');
+  ta.select();
+  navigator.clipboard.writeText(ta.value).then(() => {
+    const btn = event.target;
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => btn.textContent = '📋 Copy Script', 2000);
+  });
 }
 
 // init

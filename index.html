@@ -1000,7 +1000,7 @@ function renderWorkstreams(rows) {
     const icon = WS_ICONS[ws] || '📌';
 
     const div = document.createElement('div');
-    div.className  = 'ws-group';
+    div.className  = 'ws-group collapsed';
     div.dataset.ws = ws;
     div.innerHTML  = `
       <div class="ws-header">

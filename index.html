@@ -1791,6 +1791,7 @@ function applyFilters() {
   const stF  = document.getElementById('filter-status').value;
   const owF  = document.getElementById('filter-owner').value;
   const srch = (document.getElementById('search-input').value || '').toLowerCase().trim();
+  const hasFilter = wsF || stF || owF || srch;
   document.querySelectorAll('.ws-group').forEach(group => {
     if (wsF && group.dataset.ws !== wsF) { group.classList.add('hidden-ws'); return; }
     group.classList.remove('hidden-ws');
@@ -1806,7 +1807,9 @@ function applyFilters() {
       row.classList.toggle('hidden-row', !show);
       if (show) vis++;
     });
-    group.classList.toggle('hidden-ws', vis === 0);
+    const hidden = vis === 0;
+    group.classList.toggle('hidden-ws', hidden);
+    if (!hidden) group.classList.toggle('collapsed', !hasFilter);
   });
 }
 function resetFilters() {

@@ -1074,7 +1074,8 @@ const WS_ALIASES = {
 };
 
 let allRows = [];
-let scriptUrl = localStorage.getItem('sssio_script_url') || '';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwml_2NG2E3ZIw4eAtYak2KSa9wEuXs_4lVav_DBCencYrHPDm6MGHREVBh7CuMK_s/exec';
+let scriptUrl = localStorage.getItem('sssio_script_url') || DEFAULT_SCRIPT_URL;
 let editingRow = null; // null = add mode, object = edit mode
 let selectedStatus = 'Not Started';
 

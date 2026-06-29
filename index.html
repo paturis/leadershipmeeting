@@ -646,6 +646,7 @@ tr.hidden-row { display: none; }
     </div>
     <div class="modal-footer">
       <span class="save-status" id="save-status"></span>
+      <button class="btn-danger" id="delete-btn" onclick="deleteTask()" style="display:none;margin-right:auto;background:#ff3b30;color:white;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer">🗑 Delete</button>
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
       <button class="btn-primary" id="save-btn" onclick="saveModal()">Save Changes</button>
     </div>
@@ -1118,6 +1119,7 @@ function openEditModal(rowIdx) {
   document.getElementById('save-status').textContent = '';
   document.getElementById('save-status').className = 'save-status';
   document.getElementById('f-notify').checked = false;
+  document.getElementById('delete-btn').style.display = isAdmin() ? 'inline-block' : 'none';
   updateSetupUI();
   document.getElementById('edit-modal').classList.add('open');
 }
@@ -1137,6 +1139,7 @@ function openAddModal(ws) {
   document.getElementById('save-status').className = 'save-status';
   document.getElementById('f-notify').checked = true;
   renderNotesHistory('');
+  document.getElementById('delete-btn').style.display = 'none';
   updateSetupUI();
   document.getElementById('edit-modal').classList.add('open');
 }
@@ -1174,6 +1177,27 @@ function selectStatus(s) {
 function closeModal() {
   document.getElementById('edit-modal').classList.remove('open');
   editingRow = null;
+}
+
+async function deleteTask() {
+  if (!editingRow) return;
+  if (!confirm('Delete this task? This cannot be undone.')) return;
+  if (!scriptUrl) { openSetupModal(); return; }
+  const statusEl = document.getElementById('save-status');
+  const deleteBtn = document.getElementById('delete-btn');
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'Deleting…';
+  try {
+    await writeToSheet({ action: 'delete', _row: editingRow._row });
+    allRows = allRows.filter(r => r._row !== editingRow._row);
+    closeModal();
+    renderAll(allRows);
+  } catch (e) {
+    statusEl.textContent = '⚠ Delete failed';
+    statusEl.className = 'save-status err';
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = '🗑 Delete';
+  }
 }
 
 // ── SAVE ──

@@ -472,6 +472,25 @@ tr.hidden-row { display: none; }
 }
 .step { display: flex; align-items: flex-start; gap: 0; margin-bottom: 8px; font-size: 13px; line-height: 1.5; }
 
+/* ── CONTACTS & UPDATES PANELS ── */
+.contacts-list { display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto; }
+.contact-row { display:flex; align-items:center; gap:10px; padding:10px 12px; background:#f8f8fb; border-radius:10px; }
+.contact-avatar { width:34px; height:34px; border-radius:50%; background:#0f3460; color:white; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex-shrink:0; }
+.contact-info { flex:1; min-width:0; }
+.contact-name { font-size:13px; font-weight:600; color:#1d1d1f; }
+.contact-email { font-size:11px; color:#8e8e93; }
+.contact-del { background:none; border:none; color:#c7c7cc; cursor:pointer; font-size:16px; padding:2px 6px; border-radius:6px; }
+.contact-del:hover { color:#c0392b; background:#fdecea; }
+.contact-use { background:#f0f4ff; border:none; color:#0f3460; font-size:11px; font-weight:600; padding:4px 10px; border-radius:6px; cursor:pointer; }
+.contact-use:hover { background:#dce8ff; }
+.updates-list { display:flex; flex-direction:column; gap:12px; max-height:420px; overflow-y:auto; }
+.update-task { background:#f8f8fb; border-radius:10px; padding:12px 14px; }
+.update-task-name { font-size:13px; font-weight:600; color:#1d1d1f; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+.update-notes { font-size:12px; color:#3c3c43; line-height:1.7; }
+.update-notes .note-line { padding:2px 0; border-bottom:1px solid #f0f0f5; }
+.update-notes .note-date { color:#8e8e93; font-weight:600; margin-right:6px; }
+.no-updates { font-size:13px; color:#8e8e93; text-align:center; padding:20px; }
+
 /* read-only notice */
 .readonly-notice {
   background: #f0f4ff;
@@ -487,7 +506,7 @@ tr.hidden-row { display: none; }
 <body>
 
 <!-- AUTH SCREEN -->
-<div id="auth-screen" style="display:none">
+<div id="auth-screen">
   <div class="auth-card">
     <div class="auth-logo">🕉️</div>
     <h1>SSSIO Leadership Conference Tracker</h1>
@@ -499,7 +518,7 @@ tr.hidden-row { display: none; }
 </div>
 
 <!-- MAIN APP -->
-<div id="app" style="display:block">
+<div id="app" style="display:none">
   <div class="header">
     <div class="header-left">
       <h1>🕉️ SSSIO Leadership Conference Tracker</h1>
@@ -507,6 +526,7 @@ tr.hidden-row { display: none; }
     </div>
     <div class="header-right">
       <button class="add-main-btn" onclick="openAddModal(null)">+ Add Action</button>
+      <button class="refresh-btn" onclick="openContactsModal()">👥 Contacts</button>
       <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
       <a class="sheet-link" id="sheet-link" href="https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit" target="_blank">📊 Sheet</a>
       <button class="refresh-btn" onclick="openSetupModal()">⚙️ Setup</button>
@@ -571,7 +591,7 @@ tr.hidden-row { display: none; }
       <div class="form-row">
         <div class="form-group">
           <label>Owner</label>
-          <input type="text" class="form-input" id="f-owner" placeholder="Name" />
+          <input type="text" class="form-input" id="f-owner" placeholder="Name" list="contacts-datalist" oninput="autofillEmail(this.value)" />
         </div>
         <div class="form-group">
           <label>Owner Email</label>
@@ -617,6 +637,52 @@ tr.hidden-row { display: none; }
     </div>
   </div>
 </div>
+
+<!-- CONTACTS MODAL -->
+<div class="modal-backdrop" id="contacts-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <h2>👥 Contacts</h2>
+      <button class="modal-close" onclick="closeContactsModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row" style="margin-bottom:4px">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" class="form-input" id="c-name" placeholder="Full name" />
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" class="form-input" id="c-email" placeholder="email@example.com" />
+        </div>
+      </div>
+      <button class="btn-primary" style="width:100%" onclick="addContact()">+ Add Contact</button>
+      <div class="contacts-list" id="contacts-list" style="margin-top:12px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeContactsModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- WORKSTREAM UPDATES MODAL -->
+<div class="modal-backdrop" id="updates-modal">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <h2 id="updates-modal-title">📋 Updates</h2>
+      <button class="modal-close" onclick="closeUpdatesModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="updates-list" id="updates-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeUpdatesModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- DATALIST for owner autocomplete -->
+<datalist id="contacts-datalist"></datalist>
 
 <!-- SETUP MODAL -->
 <div class="modal-backdrop" id="setup-modal">
@@ -768,7 +834,7 @@ function logout() {
   document.getElementById('app').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
 }
-showApp(); // password disabled temporarily
+if (localStorage.getItem('ssio_auth') === '1') showApp();
 
 function showApp() {
   document.getElementById('auth-screen').style.display = 'none';
@@ -900,7 +966,8 @@ function renderWorkstreams(rows) {
           <div class="ws-progress"><div class="ws-progress-fill" style="width:${pct}%"></div></div>
           <span class="ws-count">${done}/${tasks.length} done</span>
         </div>
-        <button class="ws-add-btn" onclick="openAddModal('${esc(ws)}')">+ Add</button>
+        <button class="ws-add-btn" onclick="openUpdatesModal('${esc(ws)}')" style="background:rgba(15,52,96,0.05)">📋 Updates</button>
+        <button class="ws-add-btn" onclick="openAddModal('${esc(ws)}')">+ Add Task</button>
         <span class="ws-chevron" onclick="toggleGroupEl(this.closest('.ws-group'))">▼</span>
       </div>
       <div class="ws-body">
@@ -1076,6 +1143,7 @@ async function saveModal() {
 
   const data = { Task: task, Workstream: ws, Owner: owner, 'Owner Email': email,
                  'Due Date': due, Status: selectedStatus };
+  if (owner && email) autoSaveContact(owner, email);
 
   // Append new note with timestamp to history
   const newNote = document.getElementById('f-update').value.trim();
@@ -1258,6 +1326,117 @@ function resetFilters() {
 // close modals on backdrop click
 document.getElementById('edit-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 document.getElementById('setup-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeSetupModal(); });
+document.getElementById('contacts-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeContactsModal(); });
+document.getElementById('updates-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeUpdatesModal(); });
+
+// ── CONTACTS ──
+function loadContacts() {
+  return JSON.parse(localStorage.getItem('sssio_contacts') || '[]');
+}
+function saveContacts(contacts) {
+  localStorage.setItem('sssio_contacts', JSON.stringify(contacts));
+  refreshDatalist();
+}
+function refreshDatalist() {
+  const dl = document.getElementById('contacts-datalist');
+  dl.innerHTML = '';
+  loadContacts().forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.name; opt.dataset.email = c.email;
+    dl.appendChild(opt);
+  });
+}
+function autofillEmail(name) {
+  const contact = loadContacts().find(c => c.name.toLowerCase() === name.toLowerCase());
+  if (contact) document.getElementById('f-email').value = contact.email;
+}
+function autoSaveContact(name, email) {
+  if (!name || !email) return;
+  const contacts = loadContacts();
+  const exists = contacts.find(c => c.email.toLowerCase() === email.toLowerCase());
+  if (!exists) { contacts.push({ name, email }); saveContacts(contacts); }
+}
+function addContact() {
+  const name  = document.getElementById('c-name').value.trim();
+  const email = document.getElementById('c-email').value.trim();
+  if (!name || !email) return;
+  const contacts = loadContacts();
+  const exists = contacts.find(c => c.email.toLowerCase() === email.toLowerCase());
+  if (!exists) { contacts.push({ name, email }); saveContacts(contacts); }
+  document.getElementById('c-name').value  = '';
+  document.getElementById('c-email').value = '';
+  renderContactsList();
+}
+function deleteContact(email) {
+  saveContacts(loadContacts().filter(c => c.email !== email));
+  renderContactsList();
+}
+function useContact(name, email) {
+  closeContactsModal();
+  document.getElementById('f-owner').value = name;
+  document.getElementById('f-email').value = email;
+}
+function renderContactsList() {
+  const list = document.getElementById('contacts-list');
+  const contacts = loadContacts();
+  if (!contacts.length) { list.innerHTML = '<div class="no-updates">No contacts saved yet. Add an owner with email when creating a task — they\'ll be saved automatically.</div>'; return; }
+  list.innerHTML = contacts.map(c => `
+    <div class="contact-row">
+      <div class="contact-avatar">${esc(c.name.charAt(0).toUpperCase())}</div>
+      <div class="contact-info">
+        <div class="contact-name">${esc(c.name)}</div>
+        <div class="contact-email">${esc(c.email)}</div>
+      </div>
+      <button class="contact-use" onclick="useContact('${esc(c.name)}','${esc(c.email)}')">Use</button>
+      <button class="contact-del" onclick="deleteContact('${esc(c.email)}')">✕</button>
+    </div>`).join('');
+}
+function openContactsModal() {
+  renderContactsList();
+  document.getElementById('contacts-modal').classList.add('open');
+}
+function closeContactsModal() {
+  document.getElementById('contacts-modal').classList.remove('open');
+}
+
+// ── WORKSTREAM UPDATES ──
+function openUpdatesModal(ws) {
+  const tasks = allRows.filter(r => r['Workstream'] === ws);
+  document.getElementById('updates-modal-title').textContent = '📋 ' + toTitle(ws) + ' — Updates';
+  const list = document.getElementById('updates-list');
+  const withNotes = tasks.filter(t => t['Notes History'] || t['Latest Update'] || getLatestWeekUpdate(t));
+  if (!withNotes.length) {
+    list.innerHTML = '<div class="no-updates">No updates recorded yet for this workstream.</div>';
+  } else {
+    list.innerHTML = withNotes.map(t => {
+      const history = t['Notes History'] || '';
+      const latest  = t['Latest Update'] || getLatestWeekUpdate(t);
+      const notesHtml = history
+        ? history.split('\n').filter(Boolean).reverse().map(line => {
+            const idx = line.indexOf(': ');
+            const date = idx >= 0 ? line.slice(0, idx) : '';
+            const note = idx >= 0 ? line.slice(idx + 2) : line;
+            return `<div class="note-line"><span class="note-date">${esc(date)}</span>${esc(note)}</div>`;
+          }).join('')
+        : latest ? `<div class="note-line">${esc(latest)}</div>` : '';
+      return `<div class="update-task">
+        <div class="update-task-name">
+          <span class="badge ${statusClass(t['Status'] || 'Not Started')}">${esc(t['Status'] || 'Not Started')}</span>
+          ${esc(t['Task'] || t['Action'] || '')}
+          ${t['Owner'] ? `<span style="font-size:11px;color:#8e8e93;font-weight:400">· ${esc(t['Owner'])}</span>` : ''}
+        </div>
+        <div class="update-notes">${notesHtml || '<span style="color:#c7c7cc;font-style:italic">No notes yet</span>'}</div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('updates-modal').classList.add('open');
+}
+function closeUpdatesModal() {
+  document.getElementById('updates-modal').classList.remove('open');
+}
+
+// init
+refreshDatalist();
 </script>
 </body>
 </html>

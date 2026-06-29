@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSIO Conference Tracker — July 24–29</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  min-height: 100vh;
+}
+
+/* ── AUTH SCREEN ── */
+#auth-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+}
+.auth-card {
+  background: white;
+  border-radius: 16px;
+  padding: 48px 40px;
+  width: 360px;
+  text-align: center;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+}
+.auth-logo { font-size: 36px; margin-bottom: 12px; }
+.auth-card h1 { font-size: 20px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
+.auth-card p { font-size: 13px; color: #6e6e73; margin-bottom: 28px; }
+.auth-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid #d1d1d6;
+  border-radius: 10px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+  margin-bottom: 12px;
+  text-align: center;
+  letter-spacing: 2px;
+}
+.auth-input:focus { border-color: #0f3460; }
+.auth-btn {
+  width: 100%;
+  padding: 12px;
+  background: #0f3460;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.auth-btn:hover { background: #16213e; }
+.auth-error { color: #c0392b; font-size: 13px; margin-top: 10px; display: none; }
+
+/* ── MAIN APP ── */
+#app { display: none; }
+
+.header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+  color: white;
+  padding: 20px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+}
+.header-left h1 { font-size: 17px; font-weight: 700; }
+.header-left p { font-size: 12px; opacity: 0.65; margin-top: 2px; }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.sheet-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.12);
+  color: white;
+  text-decoration: none;
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.sheet-link:hover { background: rgba(255,255,255,0.22); }
+.refresh-btn {
+  background: rgba(255,255,255,0.12);
+  border: none;
+  color: white;
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.refresh-btn:hover { background: rgba(255,255,255,0.22); }
+.logout-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.7);
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.logout-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+
+/* ── SUMMARY CARDS ── */
+.summary-bar {
+  display: flex;
+  gap: 12px;
+  padding: 20px 28px 0;
+  flex-wrap: wrap;
+}
+.summary-card {
+  flex: 1;
+  min-width: 110px;
+  background: white;
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+.summary-card .val {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.summary-card .lbl {
+  font-size: 11px;
+  color: #6e6e73;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.val-total { color: #1a1a2e; }
+.val-inprog { color: #b8860b; }
+.val-done { color: #1a8c4e; }
+.val-notstart { color: #6e6e73; }
+.val-blocked { color: #c0392b; }
+
+/* ── FILTERS ── */
+.filters {
+  display: flex;
+  gap: 8px;
+  padding: 16px 28px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.filters label { font-size: 12px; font-weight: 600; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.5px; }
+.filter-select {
+  padding: 7px 12px;
+  border: 1.5px solid #d1d1d6;
+  border-radius: 8px;
+  font-size: 13px;
+  background: white;
+  color: #1d1d1f;
+  outline: none;
+  cursor: pointer;
+}
+.filter-select:focus { border-color: #0f3460; }
+.filter-reset {
+  padding: 7px 14px;
+  background: transparent;
+  border: 1.5px solid #d1d1d6;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #6e6e73;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.filter-reset:hover { border-color: #0f3460; color: #0f3460; }
+.last-updated { margin-left: auto; font-size: 11px; color: #aeaeb2; }
+
+/* ── WORKSTREAM GROUPS ── */
+.workstreams { padding: 0 28px 40px; }
+
+.ws-group {
+  background: white;
+  border-radius: 14px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  overflow: hidden;
+}
+.ws-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 20px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid #f0f0f5;
+  gap: 12px;
+  transition: background 0.15s;
+}
+.ws-header:hover { background: #fafafa; }
+.ws-icon { font-size: 18px; }
+.ws-title { font-size: 14px; font-weight: 700; color: #1a1a2e; flex: 1; }
+.ws-meta { display: flex; align-items: center; gap: 8px; }
+.ws-progress { width: 80px; height: 5px; background: #e9ecef; border-radius: 99px; overflow: hidden; }
+.ws-progress-fill { height: 100%; background: #1a8c4e; border-radius: 99px; transition: width 0.4s; }
+.ws-count { font-size: 12px; color: #6e6e73; white-space: nowrap; }
+.ws-chevron { color: #aeaeb2; font-size: 12px; transition: transform 0.2s; }
+.ws-group.collapsed .ws-chevron { transform: rotate(-90deg); }
+.ws-group.collapsed .ws-body { display: none; }
+
+/* ── TASK TABLE ── */
+.ws-body { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th {
+  background: #f8f8fb;
+  padding: 9px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8e8e93;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid #f0f0f5;
+  white-space: nowrap;
+}
+tbody tr { border-bottom: 1px solid #f7f7f9; transition: background 0.1s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: #f8f8fb; }
+tbody td { padding: 11px 14px; vertical-align: top; }
+.task-name { font-weight: 500; color: #1d1d1f; line-height: 1.4; }
+.task-notes { font-size: 11px; color: #8e8e93; margin-top: 3px; line-height: 1.4; }
+.owner-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f0f0f5;
+  color: #1a1a2e;
+  border-radius: 20px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.due-date { font-size: 12px; font-weight: 500; white-space: nowrap; }
+.due-overdue { color: #c0392b; }
+.due-soon { color: #d97706; }
+.due-ok { color: #6e6e73; }
+
+/* ── STATUS BADGES ── */
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.badge-not-started { background: #f0f0f5; color: #6e6e73; }
+.badge-in-progress { background: #fff8e1; color: #b8860b; }
+.badge-complete    { background: #e8f5e9; color: #1a8c4e; }
+.badge-blocked     { background: #fdecea; color: #c0392b; }
+
+.weekly-update { font-size: 11px; color: #3c3c43; line-height: 1.4; max-width: 160px; }
+.weekly-update.empty { color: #c7c7cc; font-style: italic; }
+
+/* ── LOADING / EMPTY ── */
+.loading { text-align: center; padding: 60px; color: #6e6e73; font-size: 14px; }
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid #e9ecef;
+  border-top-color: #0f3460;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.no-results { text-align: center; padding: 40px; color: #8e8e93; font-size: 13px; }
+tr.hidden-row { display: none; }
+.ws-group.hidden-ws { display: none; }
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">🕉️</div>
+    <h1>SSIO Conference Tracker</h1>
+    <p>July 24–29, 2026 · Leadership Meeting</p>
+    <input id="pw-input" class="auth-input" type="password" placeholder="Enter password" />
+    <button class="auth-btn" onclick="checkPassword()">Enter</button>
+    <div class="auth-error" id="auth-error">Incorrect password. Try again.</div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="header">
+    <div class="header-left">
+      <h1>🕉️ SSIO Conference Tracker</h1>
+      <p>July 24–29, 2026 · Leadership Meeting</p>
+    </div>
+    <div class="header-right">
+      <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+      <a class="sheet-link" href="https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit" target="_blank">📊 Edit Sheet</a>
+      <button class="logout-btn" onclick="logout()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="summary-bar">
+    <div class="summary-card"><div class="val val-total" id="cnt-total">—</div><div class="lbl">Total Tasks</div></div>
+    <div class="summary-card"><div class="val val-inprog" id="cnt-inprog">—</div><div class="lbl">In Progress</div></div>
+    <div class="summary-card"><div class="val val-done" id="cnt-done">—</div><div class="lbl">Complete</div></div>
+    <div class="summary-card"><div class="val val-notstart" id="cnt-notstart">—</div><div class="lbl">Not Started</div></div>
+    <div class="summary-card"><div class="val val-blocked" id="cnt-blocked">—</div><div class="lbl">Blocked</div></div>
+  </div>
+
+  <div class="filters">
+    <label>Filter:</label>
+    <select class="filter-select" id="filter-ws" onchange="applyFilters()">
+      <option value="">All Workstreams</option>
+    </select>
+    <select class="filter-select" id="filter-status" onchange="applyFilters()">
+      <option value="">All Statuses</option>
+      <option value="Not Started">Not Started</option>
+      <option value="In Progress">In Progress</option>
+      <option value="Complete">Complete</option>
+      <option value="Blocked">Blocked</option>
+    </select>
+    <select class="filter-select" id="filter-owner" onchange="applyFilters()">
+      <option value="">All Owners</option>
+    </select>
+    <button class="filter-reset" onclick="resetFilters()">Reset</button>
+    <span class="last-updated" id="last-updated"></span>
+  </div>
+
+  <div class="workstreams" id="workstreams">
+    <div class="loading"><div class="spinner"></div>Loading tracker data…</div>
+  </div>
+</div>
+
+<script>
+const PASSWORD  = 'SSIO2026';
+// After publishing your sheet (File → Share → Publish to web → CSV), paste that URL here:
+const CSV_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSHnpLwn-E9Q5o7n9V4NdeDYSPwlZQgz-GOCMBlNrROnSJrle0MKwblK7kXx_Mgrq1LKIQgBvS2JyUy/pub?gid=538559195&single=true&output=csv';
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit';
+
+const WS_ICONS = {
+  'REGISTRATION': '📋',
+  'FOOD': '🍽️',
+  'TRANSPORTATION': '🚐',
+  'DECORATION': '🌸',
+  'VOLUNTEER COORDINATION': '🙌',
+  'BUDGET': '💰',
+  'DEVOTIONAL PLANNING': '🙏',
+  'COMMUNICATIONS': '📢',
+  'TRACKER': '📊',
+};
+
+let allRows = [];
+
+// ── AUTH ──
+function checkPassword() {
+  const val = document.getElementById('pw-input').value;
+  if (val === PASSWORD) {
+    localStorage.setItem('ssio_auth', '1');
+    showApp();
+  } else {
+    document.getElementById('auth-error').style.display = 'block';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-input').focus();
+  }
+}
+document.getElementById('pw-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') checkPassword();
+});
+function logout() {
+  localStorage.removeItem('ssio_auth');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+if (localStorage.getItem('ssio_auth') === '1') showApp();
+
+function showApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadData();
+}
+
+// ── DATA LOAD ──
+async function loadData() {
+  document.getElementById('workstreams').innerHTML =
+    '<div class="loading"><div class="spinner"></div>Loading tracker data…</div>';
+  try {
+    const res = await fetch(CSV_URL + '&t=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    allRows = parseCSV(text);
+    renderAll(allRows);
+    document.getElementById('last-updated').textContent =
+      'Refreshed ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById('workstreams').innerHTML =
+      `<div class="no-results">⚠️ Could not load data. Make sure the sheet is published to the web.<br><br>
+       <a href="${SHEET_URL}" target="_blank" style="color:#0f3460">Open Google Sheet directly →</a></div>`;
+  }
+}
+
+// ── CSV PARSER ──
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const headers = splitCSVLine(lines[0]);
+  return lines.slice(1).map(line => {
+    const vals = splitCSVLine(line);
+    const obj = {};
+    headers.forEach((h, i) => obj[h.trim()] = (vals[i] || '').trim());
+    return obj;
+  }).filter(r => r['Workstream']);
+}
+
+function splitCSVLine(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    else cur += c;
+  }
+  result.push(cur);
+  return result;
+}
+
+// ── RENDER ──
+function renderAll(rows) {
+  updateSummary(rows);
+  populateFilters(rows);
+  renderWorkstreams(rows);
+}
+
+function updateSummary(rows) {
+  const c = { total: rows.length, inprog: 0, done: 0, notstart: 0, blocked: 0 };
+  rows.forEach(r => {
+    const s = (r['Status'] || '').toLowerCase();
+    if (s.includes('progress')) c.inprog++;
+    else if (s.includes('complete')) c.done++;
+    else if (s.includes('blocked')) c.blocked++;
+    else c.notstart++;
+  });
+  document.getElementById('cnt-total').textContent   = c.total;
+  document.getElementById('cnt-inprog').textContent  = c.inprog;
+  document.getElementById('cnt-done').textContent    = c.done;
+  document.getElementById('cnt-notstart').textContent = c.notstart;
+  document.getElementById('cnt-blocked').textContent = c.blocked;
+}
+
+function populateFilters(rows) {
+  const wsEl    = document.getElementById('filter-ws');
+  const ownerEl = document.getElementById('filter-owner');
+  wsEl.innerHTML    = '<option value="">All Workstreams</option>';
+  ownerEl.innerHTML = '<option value="">All Owners</option>';
+
+  [...new Set(rows.map(r => r['Workstream']))].forEach(ws => {
+    const o = document.createElement('option');
+    o.value = ws; o.textContent = (WS_ICONS[ws] || '') + ' ' + toTitle(ws);
+    wsEl.appendChild(o);
+  });
+  [...new Set(rows.map(r => r['Owner']).filter(Boolean))].forEach(ow => {
+    const o = document.createElement('option');
+    o.value = ow; o.textContent = ow;
+    ownerEl.appendChild(o);
+  });
+}
+
+function renderWorkstreams(rows) {
+  const grouped = {};
+  rows.forEach(r => {
+    const ws = r['Workstream'] || 'OTHER';
+    if (!grouped[ws]) grouped[ws] = [];
+    grouped[ws].push(r);
+  });
+
+  const container = document.getElementById('workstreams');
+  container.innerHTML = '';
+
+  Object.entries(grouped).forEach(([ws, tasks]) => {
+    const done = tasks.filter(t => (t['Status']||'').toLowerCase().includes('complete')).length;
+    const pct  = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+    const icon = WS_ICONS[ws] || '📌';
+
+    const div = document.createElement('div');
+    div.className  = 'ws-group';
+    div.dataset.ws = ws;
+    div.innerHTML  = `
+      <div class="ws-header" onclick="toggleGroup(this)">
+        <span class="ws-icon">${icon}</span>
+        <span class="ws-title">${toTitle(ws)}</span>
+        <div class="ws-meta">
+          <div class="ws-progress"><div class="ws-progress-fill" style="width:${pct}%"></div></div>
+          <span class="ws-count">${done}/${tasks.length} done</span>
+        </div>
+        <span class="ws-chevron">▼</span>
+      </div>
+      <div class="ws-body">
+        <table>
+          <thead>
+            <tr>
+              <th style="min-width:240px">Task</th>
+              <th>Owner</th>
+              <th>Due</th>
+              <th>Status</th>
+              <th>Latest Update</th>
+            </tr>
+          </thead>
+          <tbody>${tasks.map(renderRow).join('')}</tbody>
+        </table>
+      </div>`;
+    container.appendChild(div);
+  });
+}
+
+function renderRow(t) {
+  const status  = t['Status'] || 'Not Started';
+  const owner   = t['Owner']  || 'TBD';
+  const notes   = t['Notes']  || '';
+  const latest  = getLatestUpdate(t);
+  return `<tr data-status="${esc(status)}" data-owner="${esc(owner)}">
+    <td>
+      <div class="task-name">${esc(t['Task'])}</div>
+      ${notes ? `<div class="task-notes">${esc(notes)}</div>` : ''}
+    </td>
+    <td><span class="owner-chip">👤 ${esc(owner)}</span></td>
+    <td><span class="due-date ${dueDateClass(t['Due Date'])}">${esc(t['Due Date'] || '—')}</span></td>
+    <td><span class="badge ${statusClass(status)}">${esc(status)}</span></td>
+    <td><span class="weekly-update${latest ? '' : ' empty'}">${latest ? esc(latest) : '—'}</span></td>
+  </tr>`;
+}
+
+// ── HELPERS ──
+function getLatestUpdate(t) {
+  for (const w of ['Week of Jul 19','Week of Jul 12','Week of Jul 5','Week of Jun 28']) {
+    if (t[w] && t[w].trim()) return t[w].trim();
+  }
+  return '';
+}
+function statusClass(s) {
+  const l = s.toLowerCase();
+  if (l.includes('complete')) return 'badge-complete';
+  if (l.includes('progress')) return 'badge-in-progress';
+  if (l.includes('blocked'))  return 'badge-blocked';
+  return 'badge-not-started';
+}
+function dueDateClass(d) {
+  if (!d) return 'due-ok';
+  const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const [mon, day] = d.split(' ');
+  const m = months[mon]; const dd = parseInt(day);
+  if (isNaN(m) || isNaN(dd)) return 'due-ok';
+  const due = new Date(2026, m, dd);
+  const diff = (due - new Date()) / 86400000;
+  if (diff < 0)  return 'due-overdue';
+  if (diff <= 5) return 'due-soon';
+  return 'due-ok';
+}
+function toTitle(s) {
+  return s.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function toggleGroup(h) { h.closest('.ws-group').classList.toggle('collapsed'); }
+
+// ── FILTERS ──
+function applyFilters() {
+  const wsF  = document.getElementById('filter-ws').value;
+  const stF  = document.getElementById('filter-status').value;
+  const owF  = document.getElementById('filter-owner').value;
+  document.querySelectorAll('.ws-group').forEach(group => {
+    if (wsF && group.dataset.ws !== wsF) { group.classList.add('hidden-ws'); return; }
+    group.classList.remove('hidden-ws');
+    let vis = 0;
+    group.querySelectorAll('tbody tr').forEach(row => {
+      const show = (!stF || row.dataset.status === stF) && (!owF || row.dataset.owner === owF);
+      row.classList.toggle('hidden-row', !show);
+      if (show) vis++;
+    });
+    group.classList.toggle('hidden-ws', vis === 0);
+  });
+}
+function resetFilters() {
+  ['filter-ws','filter-status','filter-owner'].forEach(id => document.getElementById(id).value = '');
+  applyFilters();
+}
+</script>
+</body>
+</html>

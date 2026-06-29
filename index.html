@@ -561,6 +561,124 @@ tr.hidden-row { display: none; }
   color: #0f3460;
   text-align: center;
 }
+
+/* ── MOBILE RESPONSIVE ── */
+@media (max-width: 640px) {
+  /* Header */
+  .header {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .header-left h1 { font-size: 14px; }
+  .header-left p  { font-size: 11px; }
+  .header-right   { gap: 6px; flex-wrap: wrap; }
+  /* Hide less critical header buttons on mobile */
+  #btn-new-ws  { display: none; }
+  .sheet-link span { display: none; }
+  /* Shrink button text */
+  .refresh-btn, .logout-btn, .add-main-btn { padding: 6px 10px; font-size: 11px; }
+
+  /* Summary cards: 3 per row on mobile */
+  .summary-bar { padding: 12px 16px 0; gap: 8px; }
+  .summary-card { min-width: calc(33% - 8px); padding: 12px 14px; }
+  .summary-card .val { font-size: 22px; }
+
+  /* Filters: stacked */
+  .filters { padding: 12px 16px; gap: 6px; flex-direction: column; align-items: stretch; }
+  .filters label { display: none; }
+  .filter-select { width: 100%; font-size: 14px; }
+  .filter-reset  { width: 100%; }
+  .last-updated  { margin-left: 0; }
+
+  /* Workstreams container */
+  .workstreams { padding: 0 12px 32px; }
+
+  /* Workstream header: wrap buttons */
+  .ws-header { padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
+  .ws-meta   { order: 10; width: 100%; }
+  .ws-progress { width: 60px; }
+  .ws-add-btn  { font-size: 11px; padding: 4px 10px; }
+
+  /* Workstream owners */
+  .ws-owners { padding: 6px 14px 8px; }
+
+  /* Task TABLE → CARD layout on mobile */
+  .ws-body { overflow-x: visible; }
+  table, tbody, tr { display: block; width: 100%; }
+  thead { display: none; }
+  tbody tr {
+    margin: 0 0 1px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #f0f0f5;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto auto;
+    gap: 6px 10px;
+    cursor: pointer;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  /* Task name spans full width */
+  tbody td[data-label="Task"] {
+    grid-column: 1 / -1;
+    padding: 0;
+  }
+  /* Owner + Due on second row */
+  tbody td[data-label="Owner"] {
+    grid-column: 1;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  tbody td[data-label="Due"] {
+    grid-column: 2;
+    padding: 0;
+    text-align: right;
+  }
+  /* Status + Quick update on third row */
+  tbody td[data-label="Status"] {
+    grid-column: 1;
+    padding: 0;
+    align-self: center;
+  }
+  tbody td[data-label="Quick"] {
+    grid-column: 2;
+    padding: 0;
+    display: flex;
+    justify-content: flex-end;
+    align-self: center;
+  }
+  /* Hide Latest Update column on mobile (visible in edit modal) */
+  tbody td[data-label="Update"] { display: none; }
+
+  /* Modal: bottom sheet on mobile */
+  .modal-backdrop { padding: 0; align-items: flex-end; }
+  .modal {
+    border-radius: 20px 20px 0 0;
+    max-height: 92vh;
+    max-width: 100%;
+  }
+  .modal-body { padding: 16px; gap: 12px; }
+  .modal-header { padding: 16px 16px 12px; }
+  .modal-footer { padding: 12px 16px; }
+  .form-row { grid-template-columns: 1fr; gap: 12px; }
+  .status-picker .sp-btn { min-width: unset; font-size: 12px; padding: 8px 6px; }
+
+  /* Auth card */
+  .auth-card { width: 100%; border-radius: 16px; padding: 36px 24px; margin: 16px; }
+
+  /* Setup banner */
+  .setup-banner { padding: 10px 16px; font-size: 12px; }
+
+  /* Contacts list */
+  .contacts-list { max-height: 280px; }
+}
+
+@media (max-width: 400px) {
+  .summary-card { min-width: calc(50% - 8px); }
+  .header-right .sheet-link { display: none; }
+}
 </style>
 </head>
 <body>
@@ -1158,15 +1276,15 @@ function renderRow(t) {
   const owner = ownerNames.join('; ') || 'TBD';
 
   return `<tr data-status="${esc(status)}" data-owner="${esc(owner)}" onclick="openEditModal(${rowIdx})">
-    <td>
+    <td data-label="Task">
       <div class="task-name">${esc(t['Task'] || t['Action'] || '')}</div>
       ${t['Notes'] ? `<div class="task-notes">${esc(t['Notes'])}</div>` : ''}
     </td>
-    <td>${ownerHtml}</td>
-    <td><span class="due-date ${dueDateClass(due)}">${due ? formatDue(due) : '—'}</span></td>
-    <td><span class="badge ${statusClass(status)}">${esc(status)}</span></td>
-    <td><span class="weekly-update${latest ? '' : ' empty'}">${latest ? esc(latest) : '—'}</span></td>
-    <td onclick="event.stopPropagation()">
+    <td data-label="Owner">${ownerHtml}</td>
+    <td data-label="Due"><span class="due-date ${dueDateClass(due)}">${due ? formatDue(due) : '—'}</span></td>
+    <td data-label="Status"><span class="badge ${statusClass(status)}">${esc(status)}</span></td>
+    <td data-label="Update"><span class="weekly-update${latest ? '' : ' empty'}">${latest ? esc(latest) : '—'}</span></td>
+    <td data-label="Quick" onclick="event.stopPropagation()">
       <div class="quick-status">
         <button class="qs-btn qs-wip${status==='In Progress'?' active':''}" onclick="quickStatus(${rowIdx},'In Progress',this)">WIP</button>
         <button class="qs-btn qs-done${status==='Complete'?' active':''}" onclick="quickStatus(${rowIdx},'Complete',this)">✓</button>

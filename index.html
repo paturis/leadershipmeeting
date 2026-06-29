@@ -562,6 +562,53 @@ tr.hidden-row { display: none; }
   text-align: center;
 }
 
+/* ── OFFLINE BANNER ── */
+.offline-banner {
+  background: #fff3cd;
+  border-bottom: 1px solid #ffc107;
+  padding: 10px 28px;
+  font-size: 13px;
+  color: #7c4f00;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.offline-banner a { color: #0f3460; font-weight: 600; }
+.offline-banner.hidden { display: none; }
+
+/* ── SEARCH ── */
+.search-input { min-width: 180px; flex: 1; }
+
+/* ── TOAST ── */
+#toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  background: #1a1a2e;
+  color: white;
+  padding: 11px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: toast-in 0.2s ease;
+  pointer-events: auto;
+}
+.toast.success { background: #1a4731; }
+.toast.error   { background: #7c1f1f; }
+@keyframes toast-in { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(6px); } }
+
 /* ── MOBILE RESPONSIVE ── */
 @media (max-width: 640px) {
   /* Header */
@@ -716,6 +763,9 @@ tr.hidden-row { display: none; }
     ⚠️ <strong>Read-only mode.</strong> Connect Google Apps Script to enable saving updates directly from this page.
     <a href="#" onclick="openSetupModal(); return false;">Setup guide →</a>
   </div>
+  <div class="offline-banner hidden" id="banner-offline">
+    📡 <strong>Connection lost.</strong> Changes can't be saved right now. Check your network and <a href="#" onclick="loadData(); return false;">retry →</a>
+  </div>
 
   <div class="summary-bar">
     <div class="summary-card"><div class="val val-total" id="cnt-total">—</div><div class="lbl">Total Tasks</div></div>
@@ -747,6 +797,7 @@ tr.hidden-row { display: none; }
       <option value="owner-asc">Owner A → Z</option>
       <option value="owner-desc">Owner Z → A</option>
     </select>
+    <input type="search" class="filter-select search-input" id="search-input" placeholder="🔍 Search tasks…" oninput="applyFilters()" />
     <button class="filter-reset" onclick="resetFilters()">Reset</button>
     <span class="last-updated" id="last-updated"></span>
   </div>
@@ -755,6 +806,7 @@ tr.hidden-row { display: none; }
     <div class="loading"><div class="spinner"></div>Loading tracker data…</div>
   </div>
 </div>
+<div id="toast-container"></div>
 
 <!-- EDIT / ADD MODAL -->
 <div class="modal-backdrop" id="edit-modal">
@@ -1078,6 +1130,23 @@ function updateSetupUI() {
 }
 
 // ── DATA LOAD ──
+// ── TOAST ──
+function showToast(msg, type = 'success', duration = 2500) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'toast-out 0.25s ease forwards';
+    setTimeout(() => el.remove(), 260);
+  }, duration);
+}
+
+// ── OFFLINE TRACKING ──
+function setOffline(isOffline) {
+  document.getElementById('banner-offline').classList.toggle('hidden', !isOffline);
+}
+
 async function loadData() {
   document.getElementById('workstreams').innerHTML =
     '<div class="loading"><div class="spinner"></div>Loading tracker data…</div>';
@@ -1088,6 +1157,7 @@ async function loadData() {
       const json = await res.json();
       rows = json.rows;
       headers = json.headers;
+      setOffline(false);
       // Sheet is source of truth — replace cache completely, no merging
       if (json.contacts !== undefined) {
         const clean = deduplicateContacts(json.contacts);
@@ -1115,6 +1185,7 @@ async function loadData() {
     renderAll(allRows);
     document.getElementById('last-updated').textContent = 'Refreshed ' + new Date().toLocaleTimeString();
   } catch (e) {
+    if (scriptUrl) setOffline(true);
     document.getElementById('workstreams').innerHTML =
       `<div class="no-results">⚠️ Could not load data.<br><br>
        <a href="${SHEET_URL}" target="_blank" style="color:#0f3460">Open Google Sheet directly →</a></div>`;
@@ -1308,6 +1379,7 @@ async function quickStatus(rowIdx, newStatus, btn) {
   updateSummary(allRows);
 
   await writeToSheet({ action: 'update', _row: rowIdx, data: { Status: newStatus } });
+  showToast('✓ Status updated');
 }
 
 // ── EDIT MODAL ──
@@ -1344,6 +1416,7 @@ function openEditModal(rowIdx) {
   document.getElementById('f-notify').checked = false;
   document.getElementById('delete-btn').style.display = isAdmin() ? 'inline-block' : 'none';
   updateSetupUI();
+  modalDirty = false;
   document.getElementById('edit-modal').classList.add('open');
 }
 
@@ -1365,6 +1438,7 @@ function openAddModal(ws) {
   renderNotesHistory('');
   document.getElementById('delete-btn').style.display = 'none';
   updateSetupUI();
+  modalDirty = false;
   document.getElementById('edit-modal').classList.add('open');
 }
 
@@ -1401,7 +1475,13 @@ function selectStatus(s) {
   document.querySelector('.' + (map[s] || 'sp-ns'))?.classList.add('selected');
 }
 
-function closeModal() {
+let modalDirty = false;
+
+function closeModal(force = false) {
+  if (!force && modalDirty) {
+    if (!confirm('You have unsaved changes. Discard them?')) return;
+  }
+  modalDirty = false;
   document.getElementById('edit-modal').classList.remove('open');
   editingRow = null;
 }
@@ -1486,15 +1566,18 @@ async function saveModal() {
     }
     statusEl.textContent = '✓ Saved';
     statusEl.className = 'save-status ok';
+    showToast('✓ Changes saved');
+    modalDirty = false;
     if (editingRow) {
       renderAll(allRows);
-      setTimeout(closeModal, 800);
+      setTimeout(closeModal, 600);
     } else {
       closeModal();
     }
   } catch (e) {
     statusEl.textContent = '⚠ Save failed — check Apps Script URL';
     statusEl.className = 'save-status err';
+    showToast('⚠ Save failed', 'error');
   }
 
   saveBtn.disabled = false;
@@ -1704,15 +1787,20 @@ async function commitRenameWs(oldWs, newWs) {
 
 // ── FILTERS ──
 function applyFilters() {
-  const wsF = document.getElementById('filter-ws').value;
-  const stF = document.getElementById('filter-status').value;
-  const owF = document.getElementById('filter-owner').value;
+  const wsF  = document.getElementById('filter-ws').value;
+  const stF  = document.getElementById('filter-status').value;
+  const owF  = document.getElementById('filter-owner').value;
+  const srch = (document.getElementById('search-input').value || '').toLowerCase().trim();
   document.querySelectorAll('.ws-group').forEach(group => {
     if (wsF && group.dataset.ws !== wsF) { group.classList.add('hidden-ws'); return; }
     group.classList.remove('hidden-ws');
     let vis = 0;
     group.querySelectorAll('tbody tr').forEach(row => {
-      const show = (!stF || row.dataset.status === stF) && (!owF || row.dataset.owner === owF);
+      let show = (!stF || row.dataset.status === stF) && (!owF || row.dataset.owner.includes(owF));
+      if (show && srch) {
+        const text = row.textContent.toLowerCase();
+        show = text.includes(srch);
+      }
       row.classList.toggle('hidden-row', !show);
       if (show) vis++;
     });
@@ -1721,11 +1809,27 @@ function applyFilters() {
 }
 function resetFilters() {
   ['filter-ws','filter-status','filter-owner','sort-by'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('search-input').value = '';
   applyFilters();
 }
 
 // close modals on backdrop click
 document.getElementById('edit-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+// mark modal dirty on any field change
+document.getElementById('edit-modal').addEventListener('input', () => { modalDirty = true; });
+document.getElementById('edit-modal').addEventListener('change', () => { modalDirty = true; });
+
+// keyboard shortcuts
+document.addEventListener('keydown', e => {
+  const modalOpen = document.getElementById('edit-modal').classList.contains('open');
+  if (e.key === 'Escape') {
+    if (modalOpen) closeModal();
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    if (modalOpen) { e.preventDefault(); saveModal(); }
+  }
+});
 document.getElementById('setup-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeSetupModal(); });
 document.getElementById('contacts-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeContactsModal(); });
 document.getElementById('updates-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeUpdatesModal(); });

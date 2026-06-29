@@ -540,16 +540,16 @@ tr.hidden-row { display: none; }
       <p>July 24–29, 2026 · Leadership Meeting</p>
     </div>
     <div class="header-right">
-      <button class="add-main-btn" onclick="openNewWorkstreamModal()">+ New Workstream</button>
-      <button class="refresh-btn" onclick="openContactsModal()">👥 Contacts</button>
+      <button id="btn-new-ws" class="add-main-btn" onclick="openNewWorkstreamModal()">+ New Workstream</button>
+      <button id="btn-contacts" class="refresh-btn" onclick="openContactsModal()">👥 Contacts</button>
       <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
-      <a class="sheet-link" id="sheet-link" href="https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit" target="_blank">📊 Sheet</a>
-      <button class="refresh-btn" onclick="openSetupModal()">⚙️ Setup</button>
+      <a id="btn-sheet" class="sheet-link" href="https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit" target="_blank">📊 Sheet</a>
+      <button id="btn-setup" class="refresh-btn" onclick="openSetupModal()">⚙️ Setup</button>
       <button class="logout-btn" onclick="logout()">Sign out</button>
     </div>
   </div>
 
-  <div class="setup-banner" id="setup-banner">
+  <div class="setup-banner" id="banner-setup">
     ⚠️ <strong>Read-only mode.</strong> Connect Google Apps Script to enable saving updates directly from this page.
     <a href="#" onclick="openSetupModal(); return false;">Setup guide →</a>
   </div>
@@ -789,7 +789,8 @@ tr.hidden-row { display: none; }
 
 <script>
 // ── CONFIG ──
-const PASSWORD  = 'SaiRam2026';
+const PASSWORD_ADMIN  = 'SaiRam2026Admin'; // Siva & Eric only
+const PASSWORD_MEMBER = 'SaiRam2026';      // all task owners
 const CSV_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSHnpLwn-E9Q5o7n9V4NdeDYSPwlZQgz-GOCMBlNrROnSJrle0MKwblK7kXx_Mgrq1LKIQgBvS2JyUy/pub?gid=538559195&single=true&output=csv';
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit';
 
@@ -806,8 +807,12 @@ let selectedStatus = 'Not Started';
 
 // ── AUTH ──
 function checkPassword() {
-  if (document.getElementById('pw-input').value === PASSWORD) {
-    localStorage.setItem('ssio_auth', '1');
+  const val = document.getElementById('pw-input').value;
+  if (val === PASSWORD_ADMIN) {
+    localStorage.setItem('ssio_auth', 'admin');
+    showApp();
+  } else if (val === PASSWORD_MEMBER) {
+    localStorage.setItem('ssio_auth', 'member');
     showApp();
   } else {
     document.getElementById('auth-error').style.display = 'block';
@@ -815,24 +820,37 @@ function checkPassword() {
     document.getElementById('pw-input').focus();
   }
 }
+function isAdmin() { return localStorage.getItem('ssio_auth') === 'admin'; }
 document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
 function logout() {
   localStorage.removeItem('ssio_auth');
   document.getElementById('app').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
 }
-if (localStorage.getItem('ssio_auth') === '1') showApp();
+if (['admin','member'].includes(localStorage.getItem('ssio_auth'))) showApp();
 
 function showApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  applyRoleUI();
   updateSetupUI();
   loadData();
 }
 
+function applyRoleUI() {
+  const admin = isAdmin();
+  // header buttons
+  document.getElementById('btn-new-ws').style.display    = admin ? '' : 'none';
+  document.getElementById('btn-contacts').style.display  = admin ? '' : 'none';
+  document.getElementById('btn-sheet').style.display     = admin ? '' : 'none';
+  document.getElementById('btn-setup').style.display     = admin ? '' : 'none';
+  document.getElementById('banner-setup').style.display  = admin ? '' : 'none';
+}
+
 function updateSetupUI() {
   const hasScript = !!scriptUrl;
-  document.getElementById('setup-banner').classList.toggle('hidden', hasScript);
+  const banner = document.getElementById('banner-setup');
+  if (banner) banner.classList.toggle('hidden', hasScript || !isAdmin());
   document.getElementById('readonly-notice').style.display = hasScript ? 'none' : 'block';
   document.getElementById('save-btn').disabled = !hasScript;
   document.getElementById('save-btn').title = hasScript ? '' : 'Connect Apps Script first (⚙️ Setup)';
@@ -954,8 +972,8 @@ function renderWorkstreams(rows) {
           <span class="ws-count">${done}/${tasks.length} done</span>
         </div>
         <button class="ws-add-btn" onclick="openUpdatesModal('${esc(ws)}')" style="background:rgba(15,52,96,0.05)">📋 Updates</button>
-        <button class="ws-add-btn" onclick="openWsOwnersModal('${esc(ws)}')">👥 Owners</button>
-        <button class="ws-add-btn" onclick="openAddModal('${esc(ws)}')">+ Add Task</button>
+        ${isAdmin() ? `<button class="ws-add-btn" onclick="openWsOwnersModal('${esc(ws)}')">👥 Owners</button>` : ''}
+        ${isAdmin() ? `<button class="ws-add-btn" onclick="openAddModal('${esc(ws)}')">+ Add Task</button>` : ''}
         <span class="ws-chevron" onclick="toggleGroupEl(this.closest('.ws-group'))">▼</span>
       </div>
       <div class="ws-owners" id="ws-owners-${esc(ws)}">${renderWsOwners(ws)}</div>

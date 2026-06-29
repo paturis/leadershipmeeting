@@ -562,7 +562,8 @@ tr.hidden-row { display: none; }
       </div>
       <div class="form-group">
         <label>Workstream</label>
-        <select class="form-select" id="f-ws"></select>
+        <select class="form-select" id="f-ws" onchange="handleWsChange(this)"></select>
+        <input type="text" class="form-input" id="f-ws-new" placeholder="New workstream name…" style="display:none;margin-top:6px" />
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -588,8 +589,12 @@ tr.hidden-row { display: none; }
         </div>
       </div>
       <div class="form-group">
-        <label>Latest Update / Notes</label>
-        <textarea class="form-textarea" id="f-update" placeholder="Add meeting notes, progress update…"></textarea>
+        <label>Add Note</label>
+        <textarea class="form-textarea" id="f-update" placeholder="Type a note… (it will be saved with today's date)" style="min-height:60px"></textarea>
+      </div>
+      <div class="form-group" id="notes-history-group" style="display:none">
+        <label>Notes History</label>
+        <div id="notes-history" style="background:#f8f8fb;border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.7;color:#3c3c43;max-height:160px;overflow-y:auto;border:1.5px solid #e9ecef;"></div>
       </div>
       <div class="form-group" id="notify-group">
         <label style="flex-direction:row;align-items:center;gap:8px;text-transform:none;font-size:13px;font-weight:500;cursor:pointer">
@@ -904,7 +909,7 @@ function renderRow(t) {
   const status  = t['Status'] || 'Not Started';
   const owner   = t['Owner']  || 'TBD';
   const email   = t['Owner Email'] || t['Email'] || '';
-  const latest  = t['Latest Update'] || getLatestWeekUpdate(t);
+  const latest  = t['Latest Update'] || getLatestWeekUpdate(t) || getLastNote(t['Notes History'] || '');
   const due     = t['Due Date'] || '';
   const rowIdx  = t._row;
 
@@ -959,9 +964,12 @@ function openEditModal(rowIdx) {
   document.getElementById('f-email').value  = row['Owner Email'] || row['Email'] || '';
   document.getElementById('f-update').value = row['Latest Update'] || '';
 
-  // Due date - try to parse existing value to yyyy-mm-dd for date input
   const dueParsed = parseDateToISO(row['Due Date'] || '');
   document.getElementById('f-due').value = dueParsed;
+
+  // Notes history
+  document.getElementById('f-update').value = '';
+  renderNotesHistory(row['Notes History'] || '');
 
   populateWsDropdown(row['Workstream'] || '');
   selectStatus(row['Status'] || 'Not Started');
@@ -984,7 +992,8 @@ function openAddModal(ws) {
   selectStatus('Not Started');
   document.getElementById('save-status').textContent = '';
   document.getElementById('save-status').className = 'save-status';
-  document.getElementById('f-notify').checked = true; // default on for new tasks
+  document.getElementById('f-notify').checked = true;
+  renderNotesHistory('');
   updateSetupUI();
   document.getElementById('edit-modal').classList.add('open');
 }
@@ -993,12 +1002,23 @@ function populateWsDropdown(selected) {
   const sel = document.getElementById('f-ws');
   sel.innerHTML = '';
   const workstreams = [...new Set(allRows.map(r => r['Workstream']).filter(Boolean))];
-  if (!workstreams.length) {
-    const allWs = Object.keys(WS_ICONS);
-    allWs.forEach(ws => { const o = document.createElement('option'); o.value = ws; o.textContent = toTitle(ws); sel.appendChild(o); });
-  } else {
-    workstreams.forEach(ws => { const o = document.createElement('option'); o.value = ws; o.textContent = (WS_ICONS[ws]||'') + ' ' + toTitle(ws); if (ws === selected) o.selected = true; sel.appendChild(o); });
-  }
+  const list = workstreams.length ? workstreams : Object.keys(WS_ICONS);
+  list.forEach(ws => {
+    const o = document.createElement('option');
+    o.value = ws; o.textContent = (WS_ICONS[ws]||'') + ' ' + toTitle(ws);
+    if (ws === selected) o.selected = true;
+    sel.appendChild(o);
+  });
+  const addOpt = document.createElement('option');
+  addOpt.value = '__new__'; addOpt.textContent = '＋ Add new workstream…';
+  sel.appendChild(addOpt);
+  document.getElementById('f-ws-new').style.display = 'none';
+}
+
+function handleWsChange(sel) {
+  const newInput = document.getElementById('f-ws-new');
+  newInput.style.display = sel.value === '__new__' ? 'block' : 'none';
+  if (sel.value === '__new__') newInput.focus();
 }
 
 function selectStatus(s) {
@@ -1034,6 +1054,27 @@ async function saveModal() {
 
   const data = { Task: task, Workstream: ws, Owner: owner, 'Owner Email': email,
                  'Due Date': due, Status: selectedStatus, 'Latest Update': update };
+
+  // Resolve workstream — new or existing
+  let ws = document.getElementById('f-ws').value;
+  if (ws === '__new__') {
+    ws = document.getElementById('f-ws-new').value.trim().toUpperCase();
+    if (!ws) { document.getElementById('f-ws-new').focus(); return; }
+  }
+  data['Workstream'] = ws;
+
+  // Append new note with timestamp to history
+  const newNote = document.getElementById('f-update').value.trim();
+  const existingHistory = editingRow ? (editingRow['Notes History'] || '') : '';
+  if (newNote) {
+    const stamp = new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+    data['Notes History'] = existingHistory
+      ? existingHistory + '\n' + stamp + ': ' + newNote
+      : stamp + ': ' + newNote;
+    data['Latest Update'] = newNote;
+  } else {
+    data['Notes History'] = existingHistory;
+  }
 
   const notify = document.getElementById('f-notify').checked;
   try {
@@ -1092,7 +1133,31 @@ function saveScriptUrl() {
   loadData();
 }
 
+// ── NOTES HISTORY ──
+function renderNotesHistory(history) {
+  const group = document.getElementById('notes-history-group');
+  const div   = document.getElementById('notes-history');
+  if (!history || !history.trim()) { group.style.display = 'none'; return; }
+  group.style.display = 'flex';
+  div.innerHTML = history.split('\n').filter(Boolean).reverse().map(line => {
+    const idx = line.indexOf(': ');
+    if (idx < 0) return `<div style="padding:3px 0;border-bottom:1px solid #f0f0f5">${esc(line)}</div>`;
+    const date = line.slice(0, idx);
+    const note = line.slice(idx + 2);
+    return `<div style="padding:4px 0;border-bottom:1px solid #f0f0f5"><span style="color:#8e8e93;font-weight:600;margin-right:6px">${esc(date)}</span>${esc(note)}</div>`;
+  }).join('');
+}
+
 // ── HELPERS ──
+function getLastNote(history) {
+  if (!history) return '';
+  const lines = history.split('\n').filter(Boolean);
+  if (!lines.length) return '';
+  const last = lines[lines.length - 1];
+  const idx = last.indexOf(': ');
+  return idx >= 0 ? last.slice(idx + 2) : last;
+}
+
 function getLatestWeekUpdate(t) {
   for (const w of ['Week of Jul 19','Week of Jul 12','Week of Jul 5','Week of Jun 28']) {
     if (t[w] && t[w].trim()) return t[w].trim();

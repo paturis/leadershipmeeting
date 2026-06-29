@@ -1796,7 +1796,9 @@ function applyFilters() {
     group.classList.remove('hidden-ws');
     let vis = 0;
     group.querySelectorAll('tbody tr').forEach(row => {
-      let show = (!stF || row.dataset.status === stF) && (!owF || row.dataset.owner.includes(owF));
+      const rowOwners = (row.dataset.owner || '').split(';').map(s => s.trim());
+      let show = (!stF || row.dataset.status === stF) &&
+                 (!owF || rowOwners.some(o => o === owF));
       if (show && srch) {
         const text = row.textContent.toLowerCase();
         show = text.includes(srch);

@@ -603,14 +603,13 @@ tr.hidden-row { display: none; }
         <select class="form-select" id="f-ws" onchange="handleWsChange(this)"></select>
         <input type="text" class="form-input" id="f-ws-new" placeholder="New workstream name…" style="display:none;margin-top:6px" />
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Owner</label>
-          <input type="text" class="form-input" id="f-owner" placeholder="Name" list="contacts-datalist" oninput="autofillEmail(this.value)" />
-        </div>
-        <div class="form-group">
-          <label>Owner Email</label>
-          <input type="email" class="form-input" id="f-email" placeholder="email@example.com" />
+      <div class="form-group">
+        <label>Owner(s)</label>
+        <div id="owners-list" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" class="form-input" id="f-owner" placeholder="Name" list="contacts-datalist" oninput="autofillEmail(this.value)" style="flex:1" />
+          <input type="email" class="form-input" id="f-email" placeholder="email@example.com" style="flex:1" />
+          <button type="button" onclick="addOwnerToList()" style="white-space:nowrap;padding:8px 12px;background:#e8f4ff;color:#1a73e8;border:1.5px solid #1a73e8;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">+ Add</button>
         </div>
       </div>
       <div class="form-group">
@@ -1040,15 +1039,18 @@ function renderWorkstreams(rows) {
 
 function renderRow(t) {
   const status  = t['Status'] || 'Not Started';
-  const owner   = t['Owner']  || 'TBD';
-  const email   = t['Owner Email'] || t['Email'] || '';
   const latest  = t['Latest Update'] || getLatestWeekUpdate(t) || getLastNote(t['Notes History'] || '');
   const due     = t['Due Date'] || '';
   const rowIdx  = t._row;
 
-  const ownerHtml = email
-    ? `<a class="owner-chip" href="mailto:${esc(email)}" onclick="event.stopPropagation()" title="${esc(email)}">👤 ${esc(owner)}</a>`
-    : `<span class="owner-chip">👤 ${esc(owner)}</span>`;
+  const ownerNames  = (t['Owner'] || '').split(';').map(s => s.trim()).filter(Boolean);
+  const ownerEmails = (t['Owner Email'] || t['Email'] || '').split(';').map(s => s.trim());
+  const ownerHtml = ownerNames.length
+    ? ownerNames.map((name, i) => ownerEmails[i]
+        ? `<a class="owner-chip" href="mailto:${esc(ownerEmails[i])}" onclick="event.stopPropagation()" title="${esc(ownerEmails[i])}">👤 ${esc(name)}</a>`
+        : `<span class="owner-chip">👤 ${esc(name)}</span>`).join(' ')
+    : `<span class="owner-chip">👤 TBD</span>`;
+  const owner = ownerNames.join('; ') || 'TBD';
 
   return `<tr data-status="${esc(status)}" data-owner="${esc(owner)}" onclick="openEditModal(${rowIdx})">
     <td>
@@ -1093,10 +1095,15 @@ function openEditModal(rowIdx) {
 
   document.getElementById('modal-title').textContent = 'Edit Action';
   document.getElementById('f-task').value   = row['Task'] || row['Action'] || '';
-  document.getElementById('f-owner').value  = row['Owner'] || '';
-  const storedEmail = row['Owner Email'] || row['Email'] || '';
-  const contactEmail = storedEmail || (loadContacts().find(c => c.name.toLowerCase() === (row['Owner']||'').toLowerCase()) || {}).email || '';
-  document.getElementById('f-email').value  = contactEmail;
+  const ownerNames  = (row['Owner'] || '').split(';').map(s => s.trim()).filter(Boolean);
+  const ownerEmails = (row['Owner Email'] || row['Email'] || '').split(';').map(s => s.trim());
+  const contacts = loadContacts();
+  setOwners(ownerNames.map((name, i) => ({
+    name,
+    email: ownerEmails[i] || (contacts.find(c => c.name.toLowerCase() === name.toLowerCase()) || {}).email || ''
+  })));
+  document.getElementById('f-owner').value = '';
+  document.getElementById('f-email').value = '';
   document.getElementById('f-update').value = row['Latest Update'] || '';
 
   const dueParsed = parseDateToISO(row['Due Date'] || '');
@@ -1119,6 +1126,7 @@ function openAddModal(ws) {
   editingRow = null;
   document.getElementById('modal-title').textContent = 'Add New Action';
   document.getElementById('f-task').value   = '';
+  setOwners([]);
   document.getElementById('f-owner').value  = '';
   document.getElementById('f-email').value  = '';
   document.getElementById('f-update').value = '';
@@ -1173,11 +1181,17 @@ async function saveModal() {
   if (!scriptUrl) { openSetupModal(); return; }
 
   const task  = document.getElementById('f-task').value.trim();
-  const owner = document.getElementById('f-owner').value.trim();
-  const email = document.getElementById('f-email').value.trim();
   const due   = formatDueForSheet(document.getElementById('f-due').value);
 
   if (!task) { document.getElementById('f-task').focus(); return; }
+
+  // Collect all owners (include any partially-typed in the add row)
+  const pendingName  = document.getElementById('f-owner').value.trim();
+  const pendingEmail = document.getElementById('f-email').value.trim();
+  if (pendingName) addOwnerToList();
+  const ownersArr = getOwners();
+  const owner = ownersArr.map(o => o.name).join('; ');
+  const email = ownersArr.map(o => o.email).join('; ');
 
   // Resolve workstream — new or existing
   let ws = document.getElementById('f-ws').value;
@@ -1194,7 +1208,7 @@ async function saveModal() {
 
   const data = { Task: task, Workstream: ws, Owner: owner, 'Owner Email': email,
                  'Due Date': due, Status: selectedStatus };
-  if (owner && email) autoSaveContact(owner, email);
+  ownersArr.forEach(o => { if (o.name && o.email) autoSaveContact(o.name, o.email); });
 
   // Append new note with timestamp to history
   const newNote = document.getElementById('f-update').value.trim();
@@ -1598,6 +1612,37 @@ function refreshDatalist() {
 function autofillEmail(name) {
   const contact = loadContacts().find(c => c.name.toLowerCase() === name.toLowerCase());
   if (contact) document.getElementById('f-email').value = contact.email;
+}
+
+// ── MULTI-OWNER LIST ──
+let _owners = [];
+function getOwners() { return _owners; }
+function setOwners(arr) { _owners = arr.slice(); renderOwnersList(); }
+function renderOwnersList() {
+  const list = document.getElementById('owners-list');
+  if (!list) return;
+  list.innerHTML = _owners.map((o, i) => `
+    <div style="display:flex;gap:8px;align-items:center;background:#f0f4ff;border-radius:8px;padding:6px 10px">
+      <span style="flex:1;font-size:13px;font-weight:600;color:#1c1c1e">${esc(o.name)}</span>
+      <span style="flex:1;font-size:12px;color:#636366">${esc(o.email)}</span>
+      <button type="button" onclick="removeOwner(${i})" style="background:none;border:none;cursor:pointer;color:#ff3b30;font-size:15px;line-height:1;padding:0 2px" title="Remove">✕</button>
+    </div>`).join('');
+}
+function addOwnerToList() {
+  const name  = document.getElementById('f-owner').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+  if (!name) { document.getElementById('f-owner').focus(); return; }
+  if (!_owners.find(o => o.name.toLowerCase() === name.toLowerCase())) {
+    _owners.push({ name, email });
+    renderOwnersList();
+  }
+  document.getElementById('f-owner').value = '';
+  document.getElementById('f-email').value = '';
+  document.getElementById('f-owner').focus();
+}
+function removeOwner(i) {
+  _owners.splice(i, 1);
+  renderOwnersList();
 }
 function autoSaveContact(name, email) {
   if (!name || !email) return;

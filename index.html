@@ -743,13 +743,9 @@ tr.hidden-row { display: none; }
     <div class="modal-body">
       <div class="form-group">
         <label>Workstream Name</label>
-        <input type="text" class="form-input" id="nws-name" placeholder="e.g. AV & Technology" />
+        <input type="text" class="form-input" id="nws-name" placeholder="e.g. AV & Technology" onkeydown="if(event.key==='Enter')createWorkstream()" />
       </div>
-      <div class="form-group">
-        <label>Workstream Owner(s) <span style="font-weight:400;color:#8e8e93">(optional — add after creating)</span></label>
-        <input type="text" class="form-input" id="nws-owner" placeholder="Name" list="contacts-datalist" />
-        <input type="email" class="form-input" id="nws-email" placeholder="email@example.com" style="margin-top:8px" />
-      </div>
+      <p style="font-size:13px;color:#8e8e93;margin:0 0 4px">After creating, use the workstream's <strong>⋯ menu</strong> to add owners, then <strong>+ Add task</strong> to add tasks.</p>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="document.getElementById('new-ws-modal').classList.remove('open')">Cancel</button>
@@ -1039,6 +1035,8 @@ function renderWorkstreams(rows) {
     if (!grouped[ws]) grouped[ws] = [];
     grouped[ws].push(r);
   });
+  // Include locally-created workstreams that have no tasks yet
+  loadPendingWorkstreams().forEach(ws => { if (!grouped[ws]) grouped[ws] = []; });
 
   const container = document.getElementById('workstreams');
   container.innerHTML = '';
@@ -1457,28 +1455,37 @@ document.addEventListener('click', closeWsMenus);
 // ── RENAME WORKSTREAM ──
 function startRenameWs(ws, titleEl) {
   const currentDisplay = toTitle(ws);
-
-  // Replace title span with inline input
   titleEl.style.display = 'none';
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:6px;flex:1';
   const input = document.createElement('input');
   input.type = 'text';
   input.value = currentDisplay;
-  input.style.cssText = 'font-size:14px;font-weight:700;color:#1a1a2e;border:1.5px solid #1a73e8;border-radius:6px;padding:3px 8px;width:180px;outline:none';
-  titleEl.insertAdjacentElement('afterend', input);
-  input.focus();
-  input.select();
+  input.style.cssText = 'font-size:14px;font-weight:700;color:#1a1a2e;border:1.5px solid #1a73e8;border-radius:6px;padding:3px 8px;width:160px;outline:none';
+  const ok  = document.createElement('button');
+  ok.textContent = '✓';
+  ok.style.cssText = 'background:#1a73e8;color:white;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px;font-weight:700';
+  const cancel = document.createElement('button');
+  cancel.textContent = '✕';
+  cancel.style.cssText = 'background:#e9ecef;color:#6e6e73;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px';
+  wrap.appendChild(input); wrap.appendChild(ok); wrap.appendChild(cancel);
+  titleEl.insertAdjacentElement('afterend', wrap);
+  setTimeout(() => { input.focus(); input.select(); }, 0);
 
-  const finish = () => {
+  const commit = () => {
     const newName = input.value.trim().toUpperCase();
-    input.remove();
-    titleEl.style.display = '';
+    wrap.remove(); titleEl.style.display = '';
     if (newName && newName !== ws) commitRenameWs(ws, newName);
   };
+  const discard = () => { wrap.remove(); titleEl.style.display = ''; };
+  ok.addEventListener('click', e => { e.stopPropagation(); commit(); });
+  cancel.addEventListener('click', e => { e.stopPropagation(); discard(); });
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') finish();
-    if (e.key === 'Escape') { input.remove(); titleEl.style.display = ''; }
+    if (e.key === 'Enter') { e.stopPropagation(); commit(); }
+    if (e.key === 'Escape') { e.stopPropagation(); discard(); }
   });
-  input.addEventListener('blur', finish);
+  input.addEventListener('click', e => e.stopPropagation());
 }
 
 async function commitRenameWs(oldWs, newWs) {
@@ -1707,21 +1714,25 @@ function openNewWorkstreamModal() {
   document.getElementById('new-ws-modal').classList.add('open');
 }
 function createWorkstream() {
-  const name  = document.getElementById('nws-name').value.trim().toUpperCase();
-  const owner = document.getElementById('nws-owner').value.trim();
-  const email = document.getElementById('nws-email').value.trim();
+  const name = document.getElementById('nws-name').value.trim().toUpperCase();
   if (!name) { document.getElementById('nws-name').focus(); return; }
-  // Save owner if provided
-  if (owner) {
-    const all = loadWsOwners();
-    if (!all[name]) all[name] = [];
-    all[name].push({ name: owner, email });
-    saveWsOwners(all);
-    if (owner && email) autoSaveContact(owner, email);
-  }
+  // Add to pending so it shows up even with 0 tasks
+  const pending = loadPendingWorkstreams();
+  if (!pending.includes(name)) { pending.push(name); savePendingWorkstreams(pending); }
   document.getElementById('new-ws-modal').classList.remove('open');
-  // Open add task modal pre-filled with new workstream
-  openAddModal(name);
+  renderAll(allRows);
+  // Scroll new workstream into view and expand it
+  setTimeout(() => {
+    const el = document.querySelector(`.ws-group[data-ws="${CSS.escape(name)}"]`);
+    if (el) { el.classList.remove('collapsed'); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  }, 50);
+}
+
+function loadPendingWorkstreams() {
+  return JSON.parse(localStorage.getItem('sssio_pending_ws') || '[]');
+}
+function savePendingWorkstreams(list) {
+  localStorage.setItem('sssio_pending_ws', JSON.stringify(list));
 }
 
 document.getElementById('new-ws-modal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });

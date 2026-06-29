@@ -630,7 +630,6 @@ tr.hidden-row { display: none; }
 const SHEET_NAME     = 'Tasks'; // ← change to your sheet tab name if different
 const TRACKER_URL    = 'https://paturis.github.io/leadershipmeeting/';
 const TRACKER_PASS   = 'SSIO2026';
-const FROM_EMAIL     = 'spaturi@sathyasai.org'; // must be a verified Gmail alias
 
 function doGet() {
   const sheet = getSheet();
@@ -686,7 +685,7 @@ function sendEmail(toEmail, ownerName, taskName, task) {
     '\nTrack and update your tasks at:\n' + TRACKER_URL +
     '\nPassword: ' + TRACKER_PASS +
     '\n\nJai Sai Ram 🕉️';
-  GmailApp.sendEmail(toEmail, subject, body, { from: FROM_EMAIL });
+  GmailApp.sendEmail(toEmail, subject, body);
 }
 
 function getSheet() {

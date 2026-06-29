@@ -1094,7 +1094,9 @@ function openEditModal(rowIdx) {
   document.getElementById('modal-title').textContent = 'Edit Action';
   document.getElementById('f-task').value   = row['Task'] || row['Action'] || '';
   document.getElementById('f-owner').value  = row['Owner'] || '';
-  document.getElementById('f-email').value  = row['Owner Email'] || row['Email'] || '';
+  const storedEmail = row['Owner Email'] || row['Email'] || '';
+  const contactEmail = storedEmail || (loadContacts().find(c => c.name.toLowerCase() === (row['Owner']||'').toLowerCase()) || {}).email || '';
+  document.getElementById('f-email').value  = contactEmail;
   document.getElementById('f-update').value = row['Latest Update'] || '';
 
   const dueParsed = parseDateToISO(row['Due Date'] || '');

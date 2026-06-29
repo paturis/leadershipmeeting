@@ -796,8 +796,11 @@ const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZ
 
 const WS_ICONS = {
   'REGISTRATION': '📋', 'FOOD': '🍽️', 'TRANSPORTATION': '🚐',
-  'DECORATION': '🌸', 'VOLUNTEER COORDINATION': '🙌', 'BUDGET': '💰',
-  'DEVOTIONAL PLANNING': '🙏', 'COMMUNICATIONS': '📢', 'TRACKER': '📊',
+  'DECORATION': '🌸', 'ALTAR/INSIDE DECORATIONS': '🌺',
+  'VOLUNTEER COORDINATION': '🙌', 'VOLUNTEER MANAGEMENT': '🙌',
+  'BUDGET': '💰', 'DEVOTIONAL PLANNING': '🙏', 'DEVOTIONAL PROGRAM': '🙏',
+  'COMMUNICATIONS': '📢', 'TRACKER': '📊',
+  'HOSPITALITY': '🏨', 'SET UP': '🔧', 'LOGISTICS': '🚛', 'AV SET UP': '🎥',
 };
 
 let allRows = [];
@@ -1669,6 +1672,10 @@ const SEED_CONTACTS = [
   { name: 'Leslie Farkas',          email: 'weprema@gmail.com' },
   { name: 'Seshu Alla',             email: 'seshualla@yahoo.com' },
   { name: 'Rattan Appoo',           email: 'rattanjal@gmail.com' },
+  { name: 'Srikanth Vaidyanathan',  email: 'svaidynathan@sathyasai.org' },
+  { name: 'Sunil Kasturi',          email: 'skasturi@sathyasai.us' },
+  { name: 'Eric Wing',              email: 'ewing@sathyasai.us' },
+  { name: 'Rani Slee',              email: 'ranislee108@gmail.com' },
 ];
 function seedContacts() {
   const existing = loadContacts();
@@ -1684,6 +1691,32 @@ function seedContacts() {
   if (changed) saveContacts(existing);
 }
 seedContacts();
+
+// ── SEED WORKSTREAM OWNERS ──
+const SEED_WS_OWNERS = {
+  'TRANSPORTATION':            [{ name:'Srinivas Nukala', email:'srinivas.nukala@gmail.com' }],
+  'FOOD':                      [{ name:'Nilesh Patel', email:'npatel@sathyasai.us' }, { name:'Leslie Farkas', email:'weprema@gmail.com' }, { name:'Rattan Appoo', email:'rattanjal@gmail.com' }],
+  'HOSPITALITY':               [{ name:'Rashmi Devnani', email:'rashu_chawla@hotmail.com' }],
+  'ALTAR/INSIDE DECORATIONS':  [{ name:'Rani Slee', email:'ranislee108@gmail.com' }],
+  'DECORATION':                [{ name:'Rani Slee', email:'ranislee108@gmail.com' }],
+  'SET UP':                    [{ name:'Anuruddha Perera', email:'masacontracting@gmail.com' }, { name:'Natubhai Patel', email:'Circlea15677@yahoo.com' }],
+  'LOGISTICS':                 [{ name:'Anuruddha Perera', email:'masacontracting@gmail.com' }, { name:'Natubhai Patel', email:'Circlea15677@yahoo.com' }],
+  'DEVOTIONAL PROGRAM':        [{ name:'Srikanth Vaidyanathan', email:'svaidynathan@sathyasai.org' }, { name:'Sunil Kasturi', email:'skasturi@sathyasai.us' }, { name:'Rani Slee', email:'ranislee108@gmail.com' }],
+  'DEVOTIONAL PLANNING':       [{ name:'Srikanth Vaidyanathan', email:'svaidynathan@sathyasai.org' }, { name:'Sunil Kasturi', email:'skasturi@sathyasai.us' }, { name:'Rani Slee', email:'ranislee108@gmail.com' }],
+  'AV SET UP':                 [{ name:'Nilesh Patel', email:'npatel@sathyasai.us' }],
+  'BUDGET':                    [{ name:'Eric Wing', email:'ewing@sathyasai.us' }],
+  'VOLUNTEER MANAGEMENT':      [{ name:'Anuruddha Perera', email:'masacontracting@gmail.com' }, { name:'Siva Paturi', email:'siva.paturi@gmail.com' }],
+  'VOLUNTEER COORDINATION':    [{ name:'Anuruddha Perera', email:'masacontracting@gmail.com' }, { name:'Siva Paturi', email:'siva.paturi@gmail.com' }],
+};
+function seedWsOwners() {
+  const existing = loadWsOwners();
+  let changed = false;
+  Object.entries(SEED_WS_OWNERS).forEach(([ws, owners]) => {
+    if (!existing[ws]) { existing[ws] = owners; changed = true; }
+  });
+  if (changed) saveWsOwners(existing);
+}
+seedWsOwners();
 
 // init
 refreshDatalist();

@@ -1019,6 +1019,7 @@ function renderWorkstreams(rows) {
         <button class="ws-add-btn" onclick="openUpdatesModal('${esc(ws)}')" style="background:rgba(15,52,96,0.05)">📋 Updates</button>
         ${isAdmin() ? `<button class="ws-add-btn" onclick="openEmailModal('${esc(ws)}')">✉️ Email</button>` : ''}
         ${isAdmin() ? `<button class="ws-add-btn" onclick="openWsOwnersModal('${esc(ws)}')">👥 Owners</button>` : ''}
+        ${isAdmin() ? `<button class="ws-add-btn" onclick="startRenameWs('${esc(ws)}', this)">✏️ Rename</button>` : ''}
         ${isAdmin() ? `<button class="ws-add-btn" onclick="openAddModal('${esc(ws)}')">+ Add Task</button>` : ''}
         <span class="ws-chevron" onclick="toggleGroupEl(this.closest('.ws-group'))">▼</span>
       </div>
@@ -1392,6 +1393,51 @@ function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function toggleGroupEl(el) { el.classList.toggle('collapsed'); }
+
+// ── RENAME WORKSTREAM ──
+function startRenameWs(ws, btn) {
+  const group = btn.closest('.ws-group');
+  const titleEl = group.querySelector('.ws-title');
+  const currentDisplay = toTitle(ws);
+
+  // Replace title span with inline input
+  titleEl.style.display = 'none';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentDisplay;
+  input.style.cssText = 'font-size:14px;font-weight:700;color:#1a1a2e;border:1.5px solid #1a73e8;border-radius:6px;padding:3px 8px;width:180px;outline:none';
+  titleEl.insertAdjacentElement('afterend', input);
+  input.focus();
+  input.select();
+
+  const finish = () => {
+    const newName = input.value.trim().toUpperCase();
+    input.remove();
+    titleEl.style.display = '';
+    if (newName && newName !== ws) commitRenameWs(ws, newName);
+  };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') finish();
+    if (e.key === 'Escape') { input.remove(); titleEl.style.display = ''; }
+  });
+  input.addEventListener('blur', finish);
+}
+
+async function commitRenameWs(oldWs, newWs) {
+  if (!scriptUrl) { alert('Connect Apps Script first (Setup button).'); return; }
+  // Update local data immediately
+  allRows.forEach(r => { if (r['Workstream'] === oldWs) r['Workstream'] = newWs; });
+  // Also update workstream owners key
+  const wsOwners = loadWsOwners();
+  if (wsOwners[oldWs]) { wsOwners[newWs] = wsOwners[oldWs]; delete wsOwners[oldWs]; saveWsOwners(wsOwners); }
+  renderAll(allRows);
+  // Persist to sheet
+  try {
+    await writeToSheet({ action: 'renameWorkstream', oldWs, newWs });
+  } catch(e) {
+    console.warn('Workstream rename failed to save to sheet:', e);
+  }
+}
 
 // ── FILTERS ──
 function applyFilters() {
@@ -1807,6 +1853,16 @@ function doPost(e) {
 
   } else if (payload.action === 'delete') {
     sheet.deleteRow(payload._row);
+
+  } else if (payload.action === 'renameWorkstream') {
+    const wsCol = headers.indexOf('Workstream');
+    if (wsCol >= 0) {
+      const lastRow = sheet.getLastRow();
+      for (var i = 2; i <= lastRow; i++) {
+        const cell = sheet.getRange(i, wsCol + 1);
+        if (cell.getValue() === payload.oldWs) cell.setValue(payload.newWs);
+      }
+    }
 
   } else if (payload.action === 'email') {
     const recipients = payload.recipients || [];

@@ -682,18 +682,32 @@ function doPost(e) {
 
 function sendEmail(toEmail, ownerName, taskName, task) {
   const subject = '[SSSIO Conference] Task assigned: ' + taskName;
-  const body =
-    'Hi ' + (ownerName || 'there') + ',\n\n' +
-    'You have been assigned a task for the SSSIO Leadership Conference (July 24–29, 2026).\n\n' +
-    'Task:        ' + (task['Task'] || taskName) + '\n' +
-    'Workstream:  ' + (task['Workstream'] || '') + '\n' +
-    'Due Date:    ' + (task['Due Date'] || 'TBD') + '\n' +
-    'Status:      ' + (task['Status'] || 'Not Started') + '\n' +
-    (task['Latest Update'] ? 'Notes:       ' + task['Latest Update'] + '\n' : '') +
-    '\nTrack and update your tasks at:\n' + TRACKER_URL +
-    '\nPassword: ' + TRACKER_PASS +
-    '\n\nJai Sai Ram 🕉️';
-  GmailApp.sendEmail(toEmail, subject, body);
+  const htmlBody =
+    '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#f5f5f7;padding:24px;">' +
+    '<div style="background:linear-gradient(135deg,#1a1a2e,#0f3460);border-radius:12px 12px 0 0;padding:24px 28px;text-align:center;">' +
+    '<div style="font-size:32px;margin-bottom:8px;">&#x1F549;</div>' +
+    '<h1 style="color:white;font-size:18px;margin:0;">SSSIO Leadership Conference</h1>' +
+    '<p style="color:rgba(255,255,255,0.7);font-size:13px;margin:4px 0 0;">July 24–29, 2026</p>' +
+    '</div>' +
+    '<div style="background:white;border-radius:0 0 12px 12px;padding:28px;">' +
+    '<p style="font-size:15px;color:#1d1d1f;margin-bottom:20px;">Sairam dear <strong>' + (ownerName || 'Volunteer') + '</strong>,</p>' +
+    '<p style="font-size:14px;color:#3c3c43;margin-bottom:24px;">You have been assigned a task for the SSSIO Leadership Conference. Please log in to the tracker to update your progress.</p>' +
+    '<div style="background:#f8f8fb;border-radius:10px;padding:18px 20px;margin-bottom:24px;border-left:4px solid #0f3460;">' +
+    '<table style="font-size:13px;color:#1d1d1f;width:100%;border-collapse:collapse;">' +
+    '<tr><td style="padding:5px 0;color:#6e6e73;width:110px;">Task</td><td style="padding:5px 0;font-weight:600;">' + (task['Task'] || taskName) + '</td></tr>' +
+    '<tr><td style="padding:5px 0;color:#6e6e73;">Workstream</td><td style="padding:5px 0;">' + (task['Workstream'] || '') + '</td></tr>' +
+    '<tr><td style="padding:5px 0;color:#6e6e73;">Due Date</td><td style="padding:5px 0;">' + (task['Due Date'] || 'TBD') + '</td></tr>' +
+    '<tr><td style="padding:5px 0;color:#6e6e73;">Status</td><td style="padding:5px 0;">' + (task['Status'] || 'Not Started') + '</td></tr>' +
+    (task['Latest Update'] ? '<tr><td style="padding:5px 0;color:#6e6e73;">Notes</td><td style="padding:5px 0;">' + task['Latest Update'] + '</td></tr>' : '') +
+    '</table></div>' +
+    '<div style="text-align:center;margin-bottom:24px;">' +
+    '<a href="' + TRACKER_URL + '" style="background:#0f3460;color:white;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;display:inline-block;">Open Tracker</a>' +
+    '</div>' +
+    '<p style="font-size:12px;color:#8e8e93;text-align:center;margin-bottom:4px;">Password: <strong style="color:#1d1d1f;">' + TRACKER_PASS + '</strong></p>' +
+    '<hr style="border:none;border-top:1px solid #f0f0f5;margin:20px 0;">' +
+    '<p style="font-size:13px;color:#6e6e73;text-align:center;margin:0;">Jai Sai Ram &#x1F549;</p>' +
+    '</div></div>';
+  GmailApp.sendEmail(toEmail, subject, '', { htmlBody: htmlBody });
 }
 
 function getSheet() {

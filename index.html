@@ -1082,6 +1082,7 @@ tbody tr.row-failed td:first-child::before { content: '⚠ '; color: #c0392b; }
 // ── RUNTIME STATE (declared early to avoid TDZ before showApp) ──
 let pendingQueue = [];      // [{id, payload, verifyKey, verifyVal, attempts, failed}]
 let autoRefreshTimer = null;
+const _pickers = {};        // people-picker registry keyed by pickerId
 
 // ── CONFIG ──
 const PASSWORD_ADMIN  = 'SaiRam2026Admin'; // Siva & Eric only
@@ -2524,7 +2525,7 @@ function closeContactsModal() {
 // ── PEOPLE PICKER ──
 // Reusable autocomplete that enforces contact-first workflow.
 // Each picker instance tracks its own selected [{name,email}] list.
-const _pickers = {};
+// _pickers declared at top of script to avoid TDZ before showApp().
 
 function initPicker(pickerId, inputId, dropdownId, chipsId) {
   const inst = { selected: [], chipsId };

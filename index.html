@@ -1136,17 +1136,22 @@ function logout() {
 if (['admin','member'].includes(localStorage.getItem('ssio_auth'))) showApp();
 
 function showApp() {
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  applyRoleUI();
-  updateSetupUI();
-  loadPendingQueue();
-  updatePendingUI();
-  // Initialize people pickers
-  initPicker('task-owner', 'picker-task', 'picker-task-dropdown', 'task-owner-chips');
-  initPicker('ws-owner',   'picker-ws',   'picker-ws-dropdown',   null);
-  loadData();
-  startAutoRefresh();
+  try {
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    applyRoleUI();
+    updateSetupUI();
+    loadPendingQueue();
+    updatePendingUI();
+    initPicker('task-owner', 'picker-task', 'picker-task-dropdown', 'task-owner-chips');
+    initPicker('ws-owner',   'picker-ws',   'picker-ws-dropdown',   null);
+    loadData();
+    startAutoRefresh();
+  } catch (err) {
+    console.error('showApp error:', err);
+    document.getElementById('workstreams').innerHTML =
+      `<div class="no-results">⚠️ App failed to initialize: ${err.message}<br>Try refreshing the page.</div>`;
+  }
 }
 
 function applyRoleUI() {
@@ -1347,7 +1352,14 @@ async function loadData(silent = false) {
   try {
     let rows, headers;
     if (scriptUrl) {
-      const res = await fetch(scriptUrl + '?t=' + Date.now(), { redirect: 'follow' });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      let res;
+      try {
+        res = await fetch(scriptUrl + '?t=' + Date.now(), { redirect: 'follow', signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
       rows = json.rows;
@@ -1357,10 +1369,10 @@ async function loadData(silent = false) {
         mergeContactsFromSheet(json.contacts);
       }
       if (json.wsOwners !== undefined) {
-        const sheetClean = normalizeWsOwners(json.wsOwners);
+        const sheetClean = normalizeAndSave(json.wsOwners);
         const localRaw   = JSON.parse(localStorage.getItem('sssio_ws_owners') || '{}');
         const merged     = Object.assign({}, localRaw, sheetClean);
-        const clean      = normalizeWsOwners(merged);
+        const clean      = normalizeAndSave(merged);
         localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
         if (JSON.stringify(clean) !== JSON.stringify(sheetClean))
           writeToSheet({ action: 'saveWsOwners', wsOwners: clean }).catch(()=>{});
@@ -2199,29 +2211,34 @@ function canonicalWs(ws) {
   return WS_ALIASES[up] || up;
 }
 
-// normalizeWsOwners: handles both old {name,email} objects and new email strings
-// Always outputs {WS_KEY: [email, ...]}
-function normalizeWsOwners(raw) {
+// normalizeWsOwners: pure transform — old {name,email} objects OR email strings → {WS_KEY: [email,...]}
+// Returns [normalizedMap, migratedContactMap] so callers decide whether to persist contacts.
+function normalizeWsOwners(raw, existingContactMap) {
   const out = {};
-  const contactMap = loadContacts();
+  const contactMap = existingContactMap ? Object.assign({}, existingContactMap) : loadContacts();
+  let contactsChanged = false;
   Object.entries(raw).forEach(([ws, owners]) => {
     const key = canonicalWs(ws);
     if (!out[key]) out[key] = [];
-    owners.forEach(o => {
+    (owners || []).forEach(o => {
       let email = '';
       if (typeof o === 'string') {
         email = o.toLowerCase();
       } else if (o && o.email) {
         email = o.email.toLowerCase();
-        // migrate: preserve name into contacts
-        if (o.name && !contactMap[email]) { contactMap[email] = o.name; }
+        if (o.name && !contactMap[email]) { contactMap[email] = o.name; contactsChanged = true; }
       }
       if (email && !out[key].includes(email)) out[key].push(email);
     });
   });
-  // persist any migrated contact names
-  saveContacts(contactMap);
-  return out;
+  return { owners: out, contactMap, contactsChanged };
+}
+
+// Wrapper that also saves contacts if migration occurred (used during loadData)
+function normalizeAndSave(raw) {
+  const { owners, contactMap, contactsChanged } = normalizeWsOwners(raw);
+  if (contactsChanged) saveContacts(contactMap);
+  return owners;
 }
 
 function loadWsOwners() {
@@ -2230,7 +2247,7 @@ function loadWsOwners() {
   const needsMigration = Object.values(raw).some(v =>
     Array.isArray(v) && v.length > 0 && typeof v[0] === 'object');
   if (needsMigration) {
-    const clean = normalizeWsOwners(raw);
+    const clean = normalizeAndSave(raw);
     localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
     return clean;
   }

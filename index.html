@@ -2916,6 +2916,7 @@ const SEED_CONTACTS = [
   { name: 'Harish Naidu',           email: 'hnaidu@sathyasai.us' },
   { name: 'Siva Paturi',            email: 'siva.paturi@gmail.com' },
   { name: 'Siva Paturi',            email: 'spaturi@sathyasai.us' },
+  { name: 'Siva Paturi',            email: 'spaturi@sathyasai.org' },
   { name: 'Alejandro (Alex) Grana', email: 'agrana@sathyasai.us' },
   { name: 'Grana Alex',             email: 'grana_alejandro@yahoo.com' },
   { name: 'Srinivas Nukala',        email: 'srinivas.nukala@gmail.com' },
@@ -2934,13 +2935,13 @@ const SEED_CONTACTS = [
   { name: 'Rani Slee',              email: 'ranislee108@gmail.com' },
 ];
 function seedContacts() {
-  if (localStorage.getItem('sssio_contacts_seeded_v2')) return;
+  if (localStorage.getItem('sssio_contacts_seeded_v3')) return;
   const map = loadContacts();
   SEED_CONTACTS.forEach(c => {
     const key = c.email.toLowerCase();
     if (!map[key]) map[key] = c.name;
   });
-  localStorage.setItem('sssio_contacts_seeded_v2', '1');
+  localStorage.setItem('sssio_contacts_seeded_v3', '1');
   saveContacts(map);
 }
 seedContacts();

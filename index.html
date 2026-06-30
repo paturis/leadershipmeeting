@@ -727,6 +727,21 @@ tr.hidden-row { display: none; }
   .header-right .sheet-link { display: none; }
 }
 
+/* ── People picker ── */
+.people-picker { position: relative; }
+.picker-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; min-height: 0; }
+.picker-chip { display: inline-flex; align-items: center; gap: 5px; background: #e8f0fe; color: #1a3c5e; border-radius: 20px; padding: 4px 10px 4px 12px; font-size: 12px; font-weight: 600; }
+.picker-chip-remove { background: none; border: none; cursor: pointer; color: #1a3c5e; font-size: 15px; line-height: 1; padding: 0; opacity: 0.5; }
+.picker-chip-remove:hover { opacity: 1; }
+.picker-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1.5px solid #d1d1d6; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.12); z-index: 600; display: none; overflow: hidden; }
+.picker-dropdown.open { display: block; }
+.picker-option { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f5f5f7; }
+.picker-option:last-child { border-bottom: none; }
+.picker-option:hover { background: #f0f6ff; }
+.picker-opt-name { font-size: 13px; font-weight: 600; color: #1d1d1f; }
+.picker-opt-email { font-size: 11px; color: #8e8e93; margin-top: 1px; }
+.picker-opt-new { font-size: 13px; color: #1a73e8; font-style: italic; }
+
 /* ── Pending saves indicator ── */
 .pending-indicator { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: default; border: none; white-space: nowrap; display: none; }
 .pending-indicator.saving { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
@@ -853,11 +868,10 @@ tbody tr.row-failed td:first-child::before { content: '⚠ '; color: #c0392b; }
       </div>
       <div class="form-group">
         <label>Owner(s)</label>
-        <div id="owners-list" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input type="text" class="form-input" id="f-owner" placeholder="Name" list="contacts-datalist" oninput="autofillEmail(this.value)" style="flex:1" />
-          <input type="email" class="form-input" id="f-email" placeholder="email@example.com" style="flex:1" />
-          <button type="button" onclick="addOwnerToList()" style="white-space:nowrap;padding:8px 12px;background:#e8f4ff;color:#1a73e8;border:1.5px solid #1a73e8;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">+ Add</button>
+        <div class="people-picker">
+          <div class="picker-chips" id="task-owner-chips"></div>
+          <input type="text" class="form-input" id="picker-task" placeholder="Type name or email to add owner…" autocomplete="off" />
+          <div class="picker-dropdown" id="picker-task-dropdown"></div>
         </div>
       </div>
       <div class="form-group">
@@ -967,17 +981,13 @@ tbody tr.row-failed td:first-child::before { content: '⚠ '; color: #c0392b; }
       <button class="modal-close" onclick="closeWsOwnersModal()">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Name</label>
-          <input type="text" class="form-input" id="wso-name" placeholder="Full name" list="contacts-datalist" oninput="autofillWsEmail(this.value)" />
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" class="form-input" id="wso-email" placeholder="email@example.com" />
+      <div class="form-group">
+        <label>Add Owner</label>
+        <div class="people-picker">
+          <input type="text" class="form-input" id="picker-ws" placeholder="Type name or email…" autocomplete="off" />
+          <div class="picker-dropdown" id="picker-ws-dropdown"></div>
         </div>
       </div>
-      <button class="btn-primary" style="width:100%" onclick="addWsOwner()">+ Add Owner</button>
       <div class="contacts-list" id="ws-owners-list" style="margin-top:12px"></div>
     </div>
     <div class="modal-footer">
@@ -1130,8 +1140,11 @@ function showApp() {
   document.getElementById('app').style.display = 'block';
   applyRoleUI();
   updateSetupUI();
-  loadPendingQueue();   // recover any failed saves from previous session
+  loadPendingQueue();
   updatePendingUI();
+  // Initialize people pickers
+  initPicker('task-owner', 'picker-task', 'picker-task-dropdown', 'task-owner-chips');
+  initPicker('ws-owner',   'picker-ws',   'picker-ws-dropdown',   null);
   loadData();
   startAutoRefresh();
 }
@@ -1275,8 +1288,8 @@ function checkVerify(item, json) {
         r['Workstream'] === item.verifyVal.Workstream);
     case 'ws_owners': {
       const sheet = json.wsOwners || {};
-      return Object.entries(item.verifyVal).every(([ws, owners]) =>
-        owners.every(o => (sheet[ws] || []).some(x => x.name === o.name)));
+      return Object.entries(item.verifyVal).every(([ws, emails]) =>
+        emails.every(e => (sheet[ws] || []).includes(e)));
     }
     default: return true;
   }
@@ -1341,11 +1354,7 @@ async function loadData(silent = false) {
       headers = json.headers;
       setOffline(false);
       if (json.contacts !== undefined) {
-        const clean = deduplicateContacts(json.contacts);
-        localStorage.setItem('sssio_contacts', JSON.stringify(clean));
-        refreshDatalist();
-        if (clean.length !== json.contacts.length)
-          writeToSheet({ action: 'saveContacts', contacts: clean }).catch(()=>{});
+        mergeContactsFromSheet(json.contacts);
       }
       if (json.wsOwners !== undefined) {
         const sheetClean = normalizeWsOwners(json.wsOwners);
@@ -1434,10 +1443,16 @@ function populateFilters(rows) {
     o.value = ws; o.textContent = (WS_ICONS[ws] || '') + ' ' + toTitle(ws);
     wsEl.appendChild(o);
   });
-  const allOwners = [...new Set(rows.flatMap(r => (r['Owner']||'').split(';').map(s=>s.trim())).filter(Boolean))].sort();
-  allOwners.forEach(ow => {
+  // Build owner filter from email column (authoritative); display resolved names
+  const contactMap = loadContacts();
+  const allEmails = [...new Set(rows.flatMap(r =>
+    (r['Owner Email'] || r['Email'] || '').split(';').map(s => s.trim().toLowerCase())
+  ).filter(Boolean))].sort((a, b) =>
+    (contactMap[a] || a).localeCompare(contactMap[b] || b));
+  allEmails.forEach(email => {
     const o = document.createElement('option');
-    o.value = ow; o.textContent = ow;
+    o.value = email;
+    o.textContent = contactMap[email] || email;
     owEl.appendChild(o);
   });
   wsEl.value = prevWs; owEl.value = prevOw;
@@ -1458,7 +1473,12 @@ function renderWorkstreams(rows) {
 
   const sortBy = document.getElementById('sort-by')?.value || '';
   const parseDue = d => { const p = new Date(d); return isNaN(p) ? Infinity : p.getTime(); };
-  const firstName = t => (t['Owner'] || '').split(';')[0].trim().split(' ').pop().toLowerCase();
+  const contactMap = loadContacts();
+  const firstName = t => {
+    const emails = (t['Owner Email'] || '').split(';').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const name = emails.length ? (contactMap[emails[0]] || emails[0]) : (t['Owner'] || '');
+    return name.split(' ').pop().toLowerCase();
+  };
 
   const sortedEntries = Object.entries(grouped).sort((a, b) => toTitle(a[0]).localeCompare(toTitle(b[0])));
 
@@ -1522,16 +1542,19 @@ function renderRow(t) {
   const due     = t['Due Date'] || '';
   const rowIdx  = t._row;
 
-  const ownerNames  = (t['Owner'] || '').split(';').map(s => s.trim()).filter(Boolean);
-  const ownerEmails = (t['Owner Email'] || t['Email'] || '').split(';').map(s => s.trim());
-  const ownerHtml = ownerNames.length
-    ? ownerNames.map((name, i) => ownerEmails[i]
-        ? `<a class="owner-chip" href="mailto:${esc(ownerEmails[i])}" onclick="event.stopPropagation()" title="${esc(ownerEmails[i])}">👤 ${esc(name)}</a>`
-        : `<span class="owner-chip">👤 ${esc(name)}</span>`).join(' ')
+  // Email column is authoritative; resolve display names from contacts
+  const ownerEmails = (t['Owner Email'] || t['Email'] || '').split(';').map(s => s.trim()).filter(Boolean);
+  const contactMap  = loadContacts();
+  const ownerHtml = ownerEmails.length
+    ? ownerEmails.map(email => {
+        const name = contactMap[email.toLowerCase()] || t['Owner'] || email;
+        return `<a class="owner-chip" href="mailto:${esc(email)}" onclick="event.stopPropagation()" title="${esc(email)}">👤 ${esc(name)}</a>`;
+      }).join(' ')
     : `<span class="owner-chip">👤 TBD</span>`;
-  const owner = ownerNames.join('; ') || 'TBD';
+  const owner = ownerEmails.map(e => contactMap[e.toLowerCase()] || e).join('; ') || 'TBD';
 
-  return `<tr data-status="${esc(status)}" data-owner="${esc(owner)}" onclick="openEditModal(${rowIdx})">
+  // data-owner stores emails (semicolon-sep) so filter matches on email PK
+  return `<tr data-status="${esc(status)}" data-owner="${esc(ownerEmails.join(';'))}" onclick="openEditModal(${rowIdx})">
     <td data-label="Task">
       <div class="task-name">${esc(t['Task'] || t['Action'] || '')}</div>
       ${t['Notes'] ? `<div class="task-notes">${esc(t['Notes'])}</div>` : ''}
@@ -1594,22 +1617,20 @@ function openEditModal(rowIdx) {
   document.getElementById('modal-title').textContent = 'Edit Action';
   document.getElementById('f-task').value   = row['Task'] || row['Action'] || '';
   document.getElementById('f-notes').value  = row['Notes'] || '';
-  const ownerNames  = (row['Owner'] || '').split(';').map(s => s.trim()).filter(Boolean);
-  const ownerEmails = (row['Owner Email'] || row['Email'] || '').split(';').map(s => s.trim());
-  const contacts = loadContacts();
-  setOwners(ownerNames.map((name, i) => ({
-    name,
-    email: ownerEmails[i] || (contacts.find(c => c.name.toLowerCase() === name.toLowerCase()) || {}).email || ''
-  })));
-  document.getElementById('f-owner').value = '';
-  document.getElementById('f-email').value = '';
-  document.getElementById('f-update').value = row['Latest Update'] || '';
 
+  // Populate owner picker from email column (authoritative); resolve names from contacts
+  const ownerEmails = (row['Owner Email'] || row['Email'] || '').split(';').map(s => s.trim()).filter(Boolean);
+  const ownerNames  = (row['Owner'] || '').split(';').map(s => s.trim());
+  const contactMap  = loadContacts();
+  pickerSetSelected('task-owner', ownerEmails.map((email, i) => ({
+    email,
+    name: contactMap[email.toLowerCase()] || ownerNames[i] || email
+  })));
+  document.getElementById('picker-task').value = '';
+
+  document.getElementById('f-update').value = '';
   const dueParsed = parseDateToISO(row['Due Date'] || '');
   document.getElementById('f-due').value = dueParsed;
-
-  // Notes history
-  document.getElementById('f-update').value = '';
   renderNotesHistory(row['Notes History'] || '');
 
   populateWsDropdown(row['Workstream'] || '');
@@ -1628,9 +1649,8 @@ function openAddModal(ws) {
   document.getElementById('modal-title').textContent = 'Add New Action';
   document.getElementById('f-task').value   = '';
   document.getElementById('f-notes').value  = '';
-  setOwners([]);
-  document.getElementById('f-owner').value  = '';
-  document.getElementById('f-email').value  = '';
+  pickerClear('task-owner');
+  document.getElementById('picker-task').value = '';
   document.getElementById('f-update').value = '';
   document.getElementById('f-due').value    = '';
   populateWsDropdown(ws || '');
@@ -1724,11 +1744,9 @@ async function saveModal() {
 
   if (!task) { document.getElementById('f-task').focus(); return; }
 
-  // Collect all owners (include any partially-typed in the add row)
-  const pendingName  = document.getElementById('f-owner').value.trim();
-  const pendingEmail = document.getElementById('f-email').value.trim();
-  if (pendingName) addOwnerToList();
-  const ownersArr = getOwners();
+  // Collect owners from picker; ensure all are saved to contacts
+  const ownersArr = pickerGetSelected('task-owner');
+  ownersArr.forEach(o => upsertContact(o.name, o.email));
   const owner = ownersArr.map(o => o.name).join('; ');
   const email = ownersArr.map(o => o.email).join('; ');
 
@@ -1748,7 +1766,7 @@ async function saveModal() {
   const notes = document.getElementById('f-notes').value.trim();
   const data = { Task: task, Workstream: ws, Owner: owner, 'Owner Email': email,
                  'Due Date': due, Status: selectedStatus, Notes: notes };
-  ownersArr.forEach(o => { if (o.name && o.email) autoSaveContact(o.name, o.email); });
+  // contacts already upserted above when reading from picker
 
   // Append new note with timestamp to history
   const newNote = document.getElementById('f-update').value.trim();
@@ -2031,9 +2049,10 @@ function applyFilters() {
     group.classList.remove('hidden-ws');
     let vis = 0;
     group.querySelectorAll('tbody tr').forEach(row => {
-      const rowOwners = (row.dataset.owner || '').split(';').map(s => s.trim());
+      // data-owner contains semicolon-separated emails; filter value is also an email
+      const rowEmails = (row.dataset.owner || '').split(';').map(s => s.trim().toLowerCase());
       let show = (!stF || row.dataset.status === stF) &&
-                 (!owF || rowOwners.some(o => o === owF));
+                 (!owF || rowEmails.some(e => e === owF.toLowerCase()));
       if (show && srch) {
         const text = row.textContent.toLowerCase();
         show = text.includes(srch);
@@ -2097,9 +2116,12 @@ function closeEmailModal() {
 }
 
 function autofillToEmail(val) {
-  const contact = loadContacts().find(c => c.name.toLowerCase() === val.toLowerCase());
-  if (contact) {
-    addEmailRecipient(contact.name, contact.email);
+  const map = loadContacts();
+  // match by name or email
+  const entry = Object.entries(map).find(([em, nm]) =>
+    nm.toLowerCase() === val.toLowerCase() || em === val.toLowerCase());
+  if (entry) {
+    addEmailRecipient(entry[1], entry[0]);
     document.getElementById('email-to-input').value = '';
   }
 }
@@ -2108,10 +2130,11 @@ function addEmailRecipient(name, email) {
   if (!name) {
     const val = document.getElementById('email-to-input').value.trim();
     if (!val) return;
-    const contact = loadContacts().find(c =>
-      c.name.toLowerCase() === val.toLowerCase() || c.email.toLowerCase() === val.toLowerCase());
-    name  = contact ? contact.name  : val;
-    email = contact ? contact.email : val;
+    const map = loadContacts();
+    const entry = Object.entries(map).find(([em, nm]) =>
+      nm.toLowerCase() === val.toLowerCase() || em === val.toLowerCase());
+    name  = entry ? entry[1] : val;
+    email = entry ? entry[0] : val;
   }
   if (!emailRecipients.find(r => r.email === email)) {
     emailRecipients.push({ name, email });
@@ -2176,109 +2199,139 @@ function canonicalWs(ws) {
   return WS_ALIASES[up] || up;
 }
 
+// normalizeWsOwners: handles both old {name,email} objects and new email strings
+// Always outputs {WS_KEY: [email, ...]}
 function normalizeWsOwners(raw) {
   const out = {};
+  const contactMap = loadContacts();
   Object.entries(raw).forEach(([ws, owners]) => {
     const key = canonicalWs(ws);
     if (!out[key]) out[key] = [];
     owners.forEach(o => {
-      if (o.name && !out[key].find(x => x.name.toLowerCase() === o.name.toLowerCase()))
-        out[key].push(o);
+      let email = '';
+      if (typeof o === 'string') {
+        email = o.toLowerCase();
+      } else if (o && o.email) {
+        email = o.email.toLowerCase();
+        // migrate: preserve name into contacts
+        if (o.name && !contactMap[email]) { contactMap[email] = o.name; }
+      }
+      if (email && !out[key].includes(email)) out[key].push(email);
     });
   });
+  // persist any migrated contact names
+  saveContacts(contactMap);
   return out;
 }
+
 function loadWsOwners() {
-  return JSON.parse(localStorage.getItem('sssio_ws_owners') || '{}');
+  const raw = JSON.parse(localStorage.getItem('sssio_ws_owners') || '{}');
+  // Detect if migration needed (any value is array of objects)
+  const needsMigration = Object.values(raw).some(v =>
+    Array.isArray(v) && v.length > 0 && typeof v[0] === 'object');
+  if (needsMigration) {
+    const clean = normalizeWsOwners(raw);
+    localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
+    return clean;
+  }
+  return raw;
 }
 
-// Case-insensitive owner lookup — finds owners regardless of how the key was stored
+// Returns email array for a workstream; case-insensitive key lookup
 function getWsOwners(ws) {
   const all = loadWsOwners();
   const key = canonicalWs(ws);
-  // Direct match first
   if (all[key]) return all[key];
-  // Fallback: scan for any key that resolves to the same canonical form
   const entry = Object.entries(all).find(([k]) => canonicalWs(k) === key);
   return entry ? entry[1] : [];
 }
+
 function saveWsOwners(data) {
-  const clean = normalizeWsOwners(data);
-  localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
-  const payload = { action: 'saveWsOwners', wsOwners: clean };
+  // data is already {WS: [email,...]} after normalizeWsOwners
+  localStorage.setItem('sssio_ws_owners', JSON.stringify(data));
+  const payload = { action: 'saveWsOwners', wsOwners: data };
   writeToSheet(payload)
-    .then(() => writeVerified(payload, 'ws_owners', clean))
+    .then(() => writeVerified(payload, 'ws_owners', data))
     .catch(() => {});
 }
+
 function renderWsOwners(ws) {
-  const owners = getWsOwners(ws);
-  if (!owners.length) return '<span class="ws-owner-label">Workstream Owners:</span><button class="ws-owner-edit" onclick="openWsOwnersModal(\''+esc(ws)+'\')">+ Add owners</button>';
-  return '<span class="ws-owner-label">Owners:</span>' +
-    owners.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(o => `<span class="ws-owner-chip" title="${esc(o.email)}">👤 ${esc(o.name)}</span>`).join('') +
+  const emails = getWsOwners(ws);
+  const contactMap = loadContacts();
+  if (!emails.length) return '<span class="ws-owner-label">Workstream Owners:</span>' +
+    `<button class="ws-owner-edit" onclick="openWsOwnersModal('${esc(ws)}')">+ Add owners</button>`;
+  const chips = [...emails]
+    .sort((a, b) => (contactMap[a] || a).localeCompare(contactMap[b] || b))
+    .map(e => `<span class="ws-owner-chip" title="${esc(e)}">👤 ${esc(contactMap[e] || e)}</span>`)
+    .join('');
+  return `<span class="ws-owner-label">Owners:</span>${chips}` +
     `<button class="ws-owner-edit" onclick="openWsOwnersModal('${esc(ws)}')">✏️ Edit</button>`;
 }
+
 function openWsOwnersModal(ws) {
   currentWsOwners = ws;
   document.getElementById('ws-owners-modal-title').textContent = '👥 Owners — ' + toTitle(ws);
-  document.getElementById('wso-name').value = '';
-  document.getElementById('wso-email').value = '';
+  document.getElementById('picker-ws').value = '';
+  // Wire picker so selecting a contact immediately adds them as owner
+  const inst = _pickers['ws-owner'];
+  if (inst) {
+    inst.selected = [];
+    inst._onPick = ({ name, email }) => { addWsOwnerByEmail(email, name); inst.selected = []; inst.renderChips(); };
+  }
   renderWsOwnersList();
   document.getElementById('ws-owners-modal').classList.add('open');
 }
+
 function closeWsOwnersModal() {
   document.getElementById('ws-owners-modal').classList.remove('open');
-  // refresh display in workstream header
   if (currentWsOwners) {
     const el = document.getElementById('ws-owners-' + currentWsOwners);
     if (el) el.innerHTML = renderWsOwners(currentWsOwners);
   }
   currentWsOwners = null;
 }
-function autofillWsEmail(name) {
-  const contact = loadContacts().find(c => c.name.toLowerCase() === name.toLowerCase());
-  if (contact) document.getElementById('wso-email').value = contact.email;
-}
-function addWsOwner() {
-  const name  = document.getElementById('wso-name').value.trim();
-  const email = document.getElementById('wso-email').value.trim();
-  if (!name) return;
+// Add owner from ws picker — called by pickerPick internally via openWsOwnersModal
+function addWsOwnerByEmail(email, name) {
   const all = loadWsOwners();
   const key = canonicalWs(currentWsOwners);
   if (!all[key]) all[key] = [];
-  if (!all[key].find(o => o.name === name)) {
-    all[key].push({ name, email });
+  if (!all[key].includes(email.toLowerCase())) {
+    all[key].push(email.toLowerCase());
+    upsertContact(name, email);
     saveWsOwners(all);
-    if (name && email) autoSaveContact(name, email);
   }
-  document.getElementById('wso-name').value = '';
-  document.getElementById('wso-email').value = '';
   renderWsOwnersList();
 }
-function removeWsOwner(name) {
+function removeWsOwner(email) {
   const all = loadWsOwners();
   const key = canonicalWs(currentWsOwners);
   if (all[key]) {
-    all[key] = all[key].filter(o => o.name !== name);
+    all[key] = all[key].filter(e => e !== email.toLowerCase());
     saveWsOwners(all);
   }
   renderWsOwnersList();
 }
 function renderWsOwnersList() {
-  const owners = getWsOwners(currentWsOwners);
+  const emails = getWsOwners(currentWsOwners);  // now returns [email, ...]
+  const contactMap = loadContacts();
   const list = document.getElementById('ws-owners-list');
-  if (!owners.length) {
+  if (!emails.length) {
     list.innerHTML = '<div class="no-updates">No owners assigned yet.</div>';
     return;
   }
-  list.innerHTML = owners.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(o => `
-    <div class="contact-row">
-      <div class="contact-avatar">${esc(o.name.charAt(0).toUpperCase())}</div>
+  const sorted = [...emails].sort((a, b) =>
+    (contactMap[a] || a).localeCompare(contactMap[b] || b));
+  list.innerHTML = sorted.map(email => {
+    const name = contactMap[email] || email;
+    return `<div class="contact-row">
+      <div class="contact-avatar">${esc(name.charAt(0).toUpperCase())}</div>
       <div class="contact-info">
-        <div class="contact-name">${esc(o.name)}</div>
-        <div class="contact-email">${esc(o.email || '—')}</div>
+        <div class="contact-name">${esc(name)}</div>
+        <div class="contact-email">${esc(email)}</div>
       </div>
-      <button class="contact-del" onclick="removeWsOwner('${esc(o.name)}')">✕</button>
-    </div>`).join('');
+      <button class="contact-del" onclick="removeWsOwner('${esc(email)}')">✕</button>
+    </div>`;
+  }).join('');
 }
 
 // ── NEW WORKSTREAM ──
@@ -2313,154 +2366,284 @@ function savePendingWorkstreams(list) {
 document.getElementById('new-ws-modal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
 document.getElementById('ws-owners-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeWsOwnersModal(); });
 
-// ── CONTACTS ──
+// ── CONTACTS (email = primary key) ──
 function loadContacts() {
-  return JSON.parse(localStorage.getItem('sssio_contacts') || '[]');
-}
-function loadDeletedEmails() {
-  return new Set(JSON.parse(localStorage.getItem('sssio_deleted_emails') || '[]'));
-}
-function markEmailDeleted(email) {
-  const s = loadDeletedEmails(); s.add(email.toLowerCase());
-  localStorage.setItem('sssio_deleted_emails', JSON.stringify([...s]));
-}
-function deduplicateContacts(contacts) {
-  const seen = new Set();
-  return contacts.filter(c => {
-    const key = c.email.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key); return true;
-  });
-}
-function saveContacts(contacts) {
-  const deleted = loadDeletedEmails();
-  const clean = deduplicateContacts(contacts.filter(c => !deleted.has(c.email.toLowerCase())));
-  localStorage.setItem('sssio_contacts', JSON.stringify(clean));
-  refreshDatalist();
-  writeToSheet({ action: 'saveContacts', contacts: clean }).catch(() => {});
-}
-function refreshDatalist() {
-  const dl = document.getElementById('contacts-datalist');
-  dl.innerHTML = '';
-  loadContacts().forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c.name; opt.dataset.email = c.email;
-    dl.appendChild(opt);
-  });
-}
-function autofillEmail(name) {
-  const contact = loadContacts().find(c => c.name.toLowerCase() === name.toLowerCase());
-  if (contact) document.getElementById('f-email').value = contact.email;
+  const raw = localStorage.getItem('sssio_contacts');
+  if (!raw) return {};
+  const parsed = JSON.parse(raw);
+  // Migrate from old array format [{name,email}] → {email: name}
+  if (Array.isArray(parsed)) {
+    const map = {};
+    parsed.forEach(c => { if (c.email) map[c.email.toLowerCase()] = c.name; });
+    localStorage.setItem('sssio_contacts', JSON.stringify(map));
+    return map;
+  }
+  return parsed; // already map format
 }
 
-// ── MULTI-OWNER LIST ──
-let _owners = [];
-function getOwners() { return _owners; }
-function setOwners(arr) { _owners = arr.slice(); renderOwnersList(); }
-function renderOwnersList() {
-  const list = document.getElementById('owners-list');
-  if (!list) return;
-  list.innerHTML = _owners.map((o, i) => `
-    <div style="display:flex;gap:8px;align-items:center;background:#f0f4ff;border-radius:8px;padding:6px 10px">
-      <span style="flex:1;font-size:13px;font-weight:600;color:#1c1c1e">${esc(o.name)}</span>
-      <span style="flex:1;font-size:12px;color:#636366">${esc(o.email)}</span>
-      <button type="button" onclick="removeOwner(${i})" style="background:none;border:none;cursor:pointer;color:#ff3b30;font-size:15px;line-height:1;padding:0 2px" title="Remove">✕</button>
-    </div>`).join('');
+function saveContacts(map) {
+  localStorage.setItem('sssio_contacts', JSON.stringify(map));
+  writeToSheet({ action: 'saveContacts', contacts: contactsToArray(map) }).catch(() => {});
 }
-function addOwnerToList() {
-  const name  = document.getElementById('f-owner').value.trim();
-  const email = document.getElementById('f-email').value.trim();
-  if (!name) { document.getElementById('f-owner').focus(); return; }
-  if (!_owners.find(o => o.name.toLowerCase() === name.toLowerCase())) {
-    _owners.push({ name, email });
-    renderOwnersList();
-  }
-  document.getElementById('f-owner').value = '';
-  document.getElementById('f-email').value = '';
-  document.getElementById('f-owner').focus();
+
+function contactsToArray(map) {
+  return Object.entries(map).map(([email, name]) => ({ name, email }));
 }
-function removeOwner(i) {
-  _owners.splice(i, 1);
-  renderOwnersList();
+
+// Upsert: if email exists update name, never create duplicate
+function upsertContact(name, email) {
+  if (!name || !email || !email.includes('@')) return;
+  const map = loadContacts();
+  map[email.toLowerCase()] = name.trim();
+  saveContacts(map);
 }
-function autoSaveContact(name, email) {
-  if (!name || !email) return;
-  const contacts = loadContacts();
-  const exists = contacts.find(c => c.email.toLowerCase() === email.toLowerCase());
-  if (!exists) { contacts.push({ name, email }); saveContacts(contacts); }
+
+function getContactName(email) {
+  if (!email) return '';
+  return loadContacts()[email.toLowerCase()] || email;
 }
+
+function deleteContact(email) {
+  const map = loadContacts();
+  delete map[email.toLowerCase()];
+  saveContacts(map);
+  renderContactsList();
+}
+
+// Fuzzy name match: returns [email, name] of closest existing contact, or null
+function findFuzzyContactMatch(name, map) {
+  const words = name.toLowerCase().trim().split(/\s+/).filter(w => w.length > 2);
+  if (!words.length) return null;
+  let best = null, bestScore = 0;
+  Object.entries(map).forEach(([email, cname]) => {
+    const cwords = cname.toLowerCase().split(/\s+/);
+    const overlap = words.filter(w => cwords.some(cw => cw.startsWith(w) || w.startsWith(cw))).length;
+    const score = overlap / Math.max(words.length, cwords.length);
+    if (score >= 0.5 && score > bestScore) { bestScore = score; best = [email, cname]; }
+  });
+  return best;
+}
+
+// Called from sheet load: merge incoming contacts array into map
+function mergeContactsFromSheet(arr) {
+  if (!Array.isArray(arr)) return;
+  const map = loadContacts();
+  arr.forEach(c => {
+    if (c.email && c.name && !map[c.email.toLowerCase()])
+      map[c.email.toLowerCase()] = c.name;
+  });
+  saveContacts(map);
+}
+
 function addContact() {
   const name  = document.getElementById('c-name').value.trim();
-  const email = document.getElementById('c-email').value.trim();
-  if (!name || !email) return;
-  const contacts = loadContacts();
-  const exists = contacts.find(c => c.email.toLowerCase() === email.toLowerCase());
-  if (!exists) { contacts.push({ name, email }); saveContacts(contacts); }
+  const email = document.getElementById('c-email').value.trim().toLowerCase();
+  if (!name || !email || !email.includes('@')) return;
+  upsertContact(name, email);
   document.getElementById('c-name').value  = '';
   document.getElementById('c-email').value = '';
   renderContactsList();
 }
-function deleteContact(email) {
-  markEmailDeleted(email);
-  saveContacts(loadContacts().filter(c => c.email !== email));
-  renderContactsList();
-}
-function useContact(name, email) {
-  closeContactsModal();
-  document.getElementById('f-owner').value = name;
-  document.getElementById('f-email').value = email;
-}
+
 function renderContactsList() {
   const list = document.getElementById('contacts-list');
-  const contacts = loadContacts().slice().sort((a,b) => a.name.localeCompare(b.name));
-  if (!contacts.length) { list.innerHTML = '<div class="no-updates">No contacts saved yet.</div>'; return; }
-  list.innerHTML = contacts.map(c => `
-    <div class="contact-row" id="crow-${esc(c.email.replace(/[^a-z0-9]/gi,'_'))}">
+  const map  = loadContacts();
+  const contacts = Object.entries(map).map(([email, name]) => ({ name, email }))
+                         .sort((a,b) => a.name.localeCompare(b.name));
+  if (!contacts.length) { list.innerHTML = '<div class="no-updates">No contacts yet.</div>'; return; }
+  list.innerHTML = contacts.map(c => {
+    const key = c.email.replace(/[^a-z0-9]/gi,'_');
+    return `<div class="contact-row" id="crow-${key}">
       <div class="contact-avatar">${esc(c.name.charAt(0).toUpperCase())}</div>
       <div class="contact-info">
         <div class="contact-name">${esc(c.name)}</div>
         <div class="contact-email">${esc(c.email)}</div>
       </div>
-      <button class="contact-use" onclick="useContact('${esc(c.name)}','${esc(c.email)}')">Use</button>
       <button class="contact-use" style="background:#f0f4ff;color:#1a73e8" onclick="editContact('${esc(c.email)}')">✏️</button>
       <button class="contact-del" onclick="deleteContact('${esc(c.email)}')">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
+
 function editContact(email) {
-  const contacts = loadContacts();
-  const c = contacts.find(x => x.email === email);
-  if (!c) return;
-  const rowId = 'crow-' + email.replace(/[^a-z0-9]/gi,'_');
-  const row = document.getElementById(rowId);
+  const map = loadContacts();
+  const name = map[email.toLowerCase()];
+  if (!name) return;
+  const key = email.replace(/[^a-z0-9]/gi,'_');
+  const row = document.getElementById('crow-' + key);
   if (!row) return;
   row.innerHTML = `
-    <div class="contact-avatar">${esc(c.name.charAt(0).toUpperCase())}</div>
+    <div class="contact-avatar">${esc(name.charAt(0).toUpperCase())}</div>
     <div class="contact-info" style="flex:1;display:flex;gap:6px">
-      <input class="form-input" style="flex:1;padding:5px 8px;font-size:13px" id="edit-name-${esc(email.replace(/[^a-z0-9]/gi,'_'))}" value="${esc(c.name)}" />
-      <input class="form-input" style="flex:1;padding:5px 8px;font-size:13px" id="edit-email-${esc(email.replace(/[^a-z0-9]/gi,'_'))}" value="${esc(c.email)}" />
+      <input class="form-input" style="flex:1;padding:5px 8px;font-size:13px" id="en-${key}" value="${esc(name)}" />
+      <input class="form-input" style="flex:1;padding:5px 8px;font-size:13px" id="ee-${key}" value="${esc(email)}" />
     </div>
-    <button class="contact-use" style="background:#e8f5e9;color:#1a8c4e" onclick="saveContactEdit('${esc(email)}')">✓ Save</button>
+    <button class="contact-use" style="background:#e8f5e9;color:#1a8c4e" onclick="saveContactEdit('${esc(email)}')">✓</button>
     <button class="contact-del" onclick="renderContactsList()">✕</button>`;
 }
+
 function saveContactEdit(oldEmail) {
-  const key = oldEmail.replace(/[^a-z0-9]/gi,'_');
-  const newName  = document.getElementById('edit-name-'  + key)?.value.trim();
-  const newEmail = document.getElementById('edit-email-' + key)?.value.trim();
-  if (!newName || !newEmail) return;
-  const contacts = loadContacts();
-  const idx = contacts.findIndex(c => c.email === oldEmail);
-  if (idx === -1) return;
-  if (newEmail !== oldEmail) markEmailDeleted(oldEmail);
-  contacts[idx] = { name: newName, email: newEmail };
-  saveContacts(contacts);
+  const key      = oldEmail.replace(/[^a-z0-9]/gi,'_');
+  const newName  = document.getElementById('en-' + key)?.value.trim();
+  const newEmail = document.getElementById('ee-' + key)?.value.trim().toLowerCase();
+  if (!newName || !newEmail || !newEmail.includes('@')) return;
+  const map = loadContacts();
+  delete map[oldEmail.toLowerCase()];
+  map[newEmail] = newName;
+  saveContacts(map);
   renderContactsList();
 }
+
 function openContactsModal() {
   renderContactsList();
   document.getElementById('contacts-modal').classList.add('open');
 }
 function closeContactsModal() {
   document.getElementById('contacts-modal').classList.remove('open');
+}
+
+// ── PEOPLE PICKER ──
+// Reusable autocomplete that enforces contact-first workflow.
+// Each picker instance tracks its own selected [{name,email}] list.
+const _pickers = {};
+
+function initPicker(pickerId, inputId, dropdownId, chipsId) {
+  const inst = { selected: [], chipsId };
+  _pickers[pickerId] = inst;
+
+  const input    = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+
+  function renderChips() {
+    const el = chipsId ? document.getElementById(chipsId) : null;
+    if (!el) return;
+    el.innerHTML = inst.selected.map((o, i) => `
+      <span class="picker-chip">👤 ${esc(o.name)}
+        <button type="button" class="picker-chip-remove"
+          onclick="_pickerRemove('${pickerId}',${i})">✕</button>
+      </span>`).join('');
+  }
+  inst.renderChips = renderChips;
+
+  function openDropdown(q) {
+    const map = loadContacts();
+    const query = q.toLowerCase();
+    const already = new Set(inst.selected.map(s => s.email.toLowerCase()));
+    const matches = Object.entries(map)
+      .filter(([em, nm]) => !already.has(em) &&
+        (nm.toLowerCase().includes(query) || em.toLowerCase().includes(query)))
+      .slice(0, 8);
+
+    dropdown.innerHTML = '';
+    matches.forEach(([email, name]) => {
+      const d = document.createElement('div');
+      d.className = 'picker-option';
+      d.innerHTML = `<div class="picker-opt-name">${esc(name)}</div>
+                     <div class="picker-opt-email">${esc(email)}</div>`;
+      d.onmousedown = e => { e.preventDefault(); pickerPick(pickerId, { name, email }); input.value = ''; };
+      dropdown.appendChild(d);
+    });
+
+    // "Add new" option if no exact email match
+    const exactEmail = map[query];
+    if (q && !exactEmail) {
+      const d = document.createElement('div');
+      d.className = 'picker-option';
+      d.innerHTML = `<div class="picker-opt-new">+ Add "${esc(q)}" as new contact…</div>`;
+      d.onmousedown = e => { e.preventDefault(); pickerPromptNew(pickerId, q, input); };
+      dropdown.appendChild(d);
+    }
+
+    dropdown.classList.toggle('open', dropdown.children.length > 0);
+  }
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    if (q.length >= 1) openDropdown(q);
+    else dropdown.classList.remove('open');
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const q = input.value.trim();
+      if (q) { dropdown.classList.remove('open'); pickerPromptNew(pickerId, q, input); }
+    }
+    if (e.key === 'Escape') { dropdown.classList.remove('open'); input.value = ''; }
+  });
+  input.addEventListener('blur', () => setTimeout(() => dropdown.classList.remove('open'), 150));
+
+  return inst;
+}
+
+function _pickerRemove(pickerId, idx) {
+  const inst = _pickers[pickerId];
+  if (!inst) return;
+  inst.selected.splice(idx, 1);
+  inst.renderChips();
+}
+
+function pickerPick(pickerId, contact) {
+  const inst = _pickers[pickerId];
+  if (!inst) return;
+  // If picker has an immediate-action callback (e.g. WS owners), call it instead of chipping
+  if (inst._onPick) { inst._onPick(contact); return; }
+  if (!inst.selected.find(s => s.email.toLowerCase() === contact.email.toLowerCase()))
+    inst.selected.push(contact);
+  inst.renderChips();
+  const dropdown = document.getElementById(pickerId + '-dropdown');
+  if (dropdown) dropdown.classList.remove('open');
+}
+
+async function pickerPromptNew(pickerId, q, input) {
+  const map = loadContacts();
+  const looksLikeEmail = q.includes('@');
+
+  // Fuzzy name warning
+  if (!looksLikeEmail) {
+    const fuzzy = findFuzzyContactMatch(q, map);
+    if (fuzzy) {
+      const [fEmail, fName] = fuzzy;
+      const use = confirm(`"${q}" looks similar to an existing contact:\n${fName} (${fEmail})\n\nUse this contact instead?`);
+      if (use) { pickerPick(pickerId, { name: fName, email: fEmail }); input.value = ''; return; }
+    }
+  }
+
+  let name = q, email = '';
+  if (looksLikeEmail) {
+    email = q.toLowerCase();
+    // Check if already exists
+    if (map[email]) { pickerPick(pickerId, { name: map[email], email }); input.value = ''; return; }
+    name = prompt(`Name for ${q}:`, '') || '';
+  } else {
+    name = q;
+    email = (prompt(`Email address for ${name}:`, '') || '').toLowerCase().trim();
+  }
+
+  if (!name || !email || !email.includes('@')) { input.value = ''; return; }
+
+  // If email already exists with different name, confirm update
+  if (map[email] && map[email].toLowerCase() !== name.toLowerCase()) {
+    const update = confirm(`${email} is already saved as "${map[email]}". Update name to "${name}"?`);
+    if (!update) { pickerPick(pickerId, { name: map[email], email }); input.value = ''; return; }
+  }
+
+  upsertContact(name, email);
+  pickerPick(pickerId, { name, email });
+  input.value = '';
+}
+
+function pickerGetSelected(pickerId) {
+  return (_pickers[pickerId] || {}).selected || [];
+}
+function pickerSetSelected(pickerId, arr) {
+  const inst = _pickers[pickerId];
+  if (!inst) return;
+  inst.selected = arr.map(o => ({ ...o }));
+  inst.renderChips();
+}
+function pickerClear(pickerId) {
+  const inst = _pickers[pickerId];
+  if (inst) { inst.selected = []; inst.renderChips(); }
 }
 
 // ── WORKSTREAM UPDATES ──
@@ -2722,56 +2905,49 @@ const SEED_CONTACTS = [
   { name: 'Rani Slee',              email: 'ranislee108@gmail.com' },
 ];
 function seedContacts() {
-  if (localStorage.getItem('sssio_contacts_seeded')) return;
-  const existing = loadContacts();
-  const deleted = loadDeletedEmails();
-  const existingEmails = new Set(existing.map(c => c.email.toLowerCase()));
+  if (localStorage.getItem('sssio_contacts_seeded_v2')) return;
+  const map = loadContacts();
   SEED_CONTACTS.forEach(c => {
-    if (!existingEmails.has(c.email.toLowerCase()) && !deleted.has(c.email.toLowerCase())) {
-      existing.push(c); existingEmails.add(c.email.toLowerCase());
-    }
+    const key = c.email.toLowerCase();
+    if (!map[key]) map[key] = c.name;
   });
-  localStorage.setItem('sssio_contacts_seeded', '1');
-  saveContacts(existing);
+  localStorage.setItem('sssio_contacts_seeded_v2', '1');
+  saveContacts(map);
 }
 seedContacts();
 
-// ── SEED WORKSTREAM OWNERS ──
+// ── SEED WORKSTREAM OWNERS (email arrays) ──
 const SEED_WS_OWNERS = {
-  'TRANSPORTATION':            [{ name:'Srinivas Nukala', email:'srinivas.nukala@gmail.com' }],
-  'FOOD':                      [{ name:'Nilesh Patel', email:'npatel@sathyasai.us' }, { name:'Leslie Farkas', email:'weprema@gmail.com' }, { name:'Rattan Appoo', email:'rattanjal@gmail.com' }],
-  'HOSPITALITY':               [{ name:'Rashmi Devnani', email:'rashu_chawla@hotmail.com' }],
-  'ALTAR/INSIDE DECORATIONS':  [{ name:'Rani Slee', email:'ranislee108@gmail.com' }],
-  'DECORATION':                [{ name:'Rani Slee', email:'ranislee108@gmail.com' }],
-  'SET UP':                    [{ name:'Anuruddha Perera', email:'masacontracting@gmail.com' }, { name:'Natubhai Patel', email:'Circlea15677@yahoo.com' }],
-  'LOGISTICS':                 [{ name:'Anuruddha Perera', email:'masacontracting@gmail.com' }, { name:'Natubhai Patel', email:'Circlea15677@yahoo.com' }],
-  'DEVOTIONAL PROGRAM':        [{ name:'Srikanth Vaidyanathan', email:'svaidynathan@sathyasai.org' }, { name:'Sunil Kasturi', email:'skasturi@sathyasai.us' }, { name:'Rani Slee', email:'ranislee108@gmail.com' }],
-  'DEVOTIONAL PLANNING':       [{ name:'Srikanth Vaidyanathan', email:'svaidynathan@sathyasai.org' }, { name:'Sunil Kasturi', email:'skasturi@sathyasai.us' }, { name:'Rani Slee', email:'ranislee108@gmail.com' }],
-  'AV SET UP':                 [{ name:'Nilesh Patel', email:'npatel@sathyasai.us' }],
-  'BUDGET':                    [{ name:'Eric Wing', email:'ewing@sathyasai.us' }],
-  'VOLUNTEER MANAGEMENT':      [{ name:'Anuruddha Perera', email:'masacontracting@gmail.com' }, { name:'Siva Paturi', email:'siva.paturi@gmail.com' }],
-  'VOLUNTEER COORDINATION':    [{ name:'Anuruddha Perera', email:'masacontracting@gmail.com' }, { name:'Siva Paturi', email:'siva.paturi@gmail.com' }],
+  'TRANSPORTATION':           ['srinivas.nukala@gmail.com'],
+  'FOOD':                     ['npatel@sathyasai.us','weprema@gmail.com','rattanjal@gmail.com'],
+  'HOSPITALITY':              ['rashu_chawla@hotmail.com'],
+  'ALTAR/INSIDE DECORATIONS': ['ranislee108@gmail.com'],
+  'DECORATION':               ['ranislee108@gmail.com'],
+  'SET UP':                   ['masacontracting@gmail.com','circlea15677@yahoo.com'],
+  'LOGISTICS':                ['masacontracting@gmail.com','circlea15677@yahoo.com'],
+  'DEVOTIONAL PROGRAM':       ['svaidynathan@sathyasai.org','skasturi@sathyasai.us','ranislee108@gmail.com'],
+  'DEVOTIONAL PLANNING':      ['svaidynathan@sathyasai.org','skasturi@sathyasai.us','ranislee108@gmail.com'],
+  'AV SET UP':                ['npatel@sathyasai.us'],
+  'BUDGET':                   ['ewing@sathyasai.us'],
+  'VOLUNTEER MANAGEMENT':     ['masacontracting@gmail.com','siva.paturi@gmail.com'],
+  'VOLUNTEER COORDINATION':   ['masacontracting@gmail.com','siva.paturi@gmail.com'],
 };
 function seedWsOwners() {
+  if (localStorage.getItem('sssio_ws_seeded_v2')) return;
+  // Run normalizeWsOwners first to migrate any old {name,email} format
   const existing = loadWsOwners();
   let changed = false;
-  Object.entries(SEED_WS_OWNERS).forEach(([ws, owners]) => {
-    if (!existing[ws]) { existing[ws] = owners; changed = true; }
+  Object.entries(SEED_WS_OWNERS).forEach(([ws, emails]) => {
+    if (!existing[ws] || !existing[ws].length) {
+      existing[ws] = emails; changed = true;
+    }
   });
+  localStorage.setItem('sssio_ws_seeded_v2', '1');
   if (changed) saveWsOwners(existing);
 }
 seedWsOwners();
 
-// One-time cleanup: normalize aliases and deduplicate wsOwners, then sync to sheet
-(function cleanupWsOwners() {
-  const raw = JSON.parse(localStorage.getItem('sssio_ws_owners') || '{}');
-  const clean = normalizeWsOwners(raw);
-  localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
-  syncWsOwnersToSheet();
-})();
-
-// init
-refreshDatalist();
+// init — contacts now a map, no datalist needed
 </script>
 </body>
 </html>

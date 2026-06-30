@@ -1169,10 +1169,15 @@ async function loadData() {
           writeToSheet({ action: 'saveContacts', contacts: clean }).catch(()=>{});
       }
       if (json.wsOwners !== undefined) {
-        const clean = normalizeWsOwners(json.wsOwners);
+        // Merge: sheet wins where it has owners; keep local data for workstreams the sheet doesn't have yet
+        // (handles the case where a saveWsOwners POST failed silently)
+        const sheetClean = normalizeWsOwners(json.wsOwners);
+        const localRaw   = JSON.parse(localStorage.getItem('sssio_ws_owners') || '{}');
+        const merged     = Object.assign({}, localRaw, sheetClean);
+        const clean      = normalizeWsOwners(merged);
         localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
-        // Push clean version back if sheet had dupes/aliases
-        if (JSON.stringify(clean) !== JSON.stringify(json.wsOwners))
+        // If local had owners the sheet didn't, push the merged version back to the sheet
+        if (JSON.stringify(clean) !== JSON.stringify(sheetClean))
           writeToSheet({ action: 'saveWsOwners', wsOwners: clean }).catch(()=>{});
       }
       if (json.workstreams !== undefined)

@@ -2170,10 +2170,16 @@ document.getElementById('email-modal').addEventListener('click', e => { if (e.ta
 // ── WORKSTREAM OWNERS ──
 let currentWsOwners = null;
 
+// Resolve any workstream string to its canonical uppercase key
+function canonicalWs(ws) {
+  const up = (ws || '').toUpperCase();
+  return WS_ALIASES[up] || up;
+}
+
 function normalizeWsOwners(raw) {
   const out = {};
   Object.entries(raw).forEach(([ws, owners]) => {
-    const key = WS_ALIASES[ws.toUpperCase()] || ws;
+    const key = canonicalWs(ws);
     if (!out[key]) out[key] = [];
     owners.forEach(o => {
       if (o.name && !out[key].find(x => x.name.toLowerCase() === o.name.toLowerCase()))
@@ -2185,6 +2191,17 @@ function normalizeWsOwners(raw) {
 function loadWsOwners() {
   return JSON.parse(localStorage.getItem('sssio_ws_owners') || '{}');
 }
+
+// Case-insensitive owner lookup — finds owners regardless of how the key was stored
+function getWsOwners(ws) {
+  const all = loadWsOwners();
+  const key = canonicalWs(ws);
+  // Direct match first
+  if (all[key]) return all[key];
+  // Fallback: scan for any key that resolves to the same canonical form
+  const entry = Object.entries(all).find(([k]) => canonicalWs(k) === key);
+  return entry ? entry[1] : [];
+}
 function saveWsOwners(data) {
   const clean = normalizeWsOwners(data);
   localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
@@ -2194,8 +2211,7 @@ function saveWsOwners(data) {
     .catch(() => {});
 }
 function renderWsOwners(ws) {
-  const all = loadWsOwners();
-  const owners = (all[ws] || []);
+  const owners = getWsOwners(ws);
   if (!owners.length) return '<span class="ws-owner-label">Workstream Owners:</span><button class="ws-owner-edit" onclick="openWsOwnersModal(\''+esc(ws)+'\')">+ Add owners</button>';
   return '<span class="ws-owner-label">Owners:</span>' +
     owners.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(o => `<span class="ws-owner-chip" title="${esc(o.email)}">👤 ${esc(o.name)}</span>`).join('') +
@@ -2227,9 +2243,10 @@ function addWsOwner() {
   const email = document.getElementById('wso-email').value.trim();
   if (!name) return;
   const all = loadWsOwners();
-  if (!all[currentWsOwners]) all[currentWsOwners] = [];
-  if (!all[currentWsOwners].find(o => o.name === name)) {
-    all[currentWsOwners].push({ name, email });
+  const key = canonicalWs(currentWsOwners);
+  if (!all[key]) all[key] = [];
+  if (!all[key].find(o => o.name === name)) {
+    all[key].push({ name, email });
     saveWsOwners(all);
     if (name && email) autoSaveContact(name, email);
   }
@@ -2239,15 +2256,15 @@ function addWsOwner() {
 }
 function removeWsOwner(name) {
   const all = loadWsOwners();
-  if (all[currentWsOwners]) {
-    all[currentWsOwners] = all[currentWsOwners].filter(o => o.name !== name);
+  const key = canonicalWs(currentWsOwners);
+  if (all[key]) {
+    all[key] = all[key].filter(o => o.name !== name);
     saveWsOwners(all);
   }
   renderWsOwnersList();
 }
 function renderWsOwnersList() {
-  const all = loadWsOwners();
-  const owners = all[currentWsOwners] || [];
+  const owners = getWsOwners(currentWsOwners);
   const list = document.getElementById('ws-owners-list');
   if (!owners.length) {
     list.innerHTML = '<div class="no-updates">No owners assigned yet.</div>';

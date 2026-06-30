@@ -1369,7 +1369,8 @@ async function loadData(silent = false) {
       }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
-      rows = json.rows;
+      // Filter out empty/blank rows that can appear from failed partial writes
+      rows = (json.rows || []).filter(r => r['Task'] && r['Task'].trim() && r['Workstream'] && r['Workstream'].trim());
       headers = json.headers;
       setOffline(false);
       if (json.contacts !== undefined) {

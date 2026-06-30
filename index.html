@@ -726,6 +726,21 @@ tr.hidden-row { display: none; }
   .summary-card { min-width: calc(50% - 8px); }
   .header-right .sheet-link { display: none; }
 }
+
+/* ── Pending saves indicator ── */
+.pending-indicator { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: default; border: none; white-space: nowrap; display: none; }
+.pending-indicator.saving { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); }
+.pending-indicator.failed { background: rgba(255,80,65,0.3); color: #ffccc9; cursor: pointer; }
+.pending-indicator.failed:hover { background: rgba(255,80,65,0.45); }
+
+/* ── Save-failed banner ── */
+.save-failed-banner { background: #7c1313; color: #ffccc9; padding: 10px 24px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+.save-failed-banner a { color: #ffd6d3; font-weight: 700; cursor: pointer; }
+.save-failed-banner.hidden { display: none; }
+
+/* ── Row save states ── */
+tbody tr.row-saving { opacity: 0.75; }
+tbody tr.row-failed td:first-child::before { content: '⚠ '; color: #c0392b; }
 </style>
 </head>
 <body>
@@ -755,8 +770,15 @@ tr.hidden-row { display: none; }
       <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
       <a id="btn-sheet" class="sheet-link" href="https://docs.google.com/spreadsheets/d/1qDroH7CobZ45cu6wVJ4eZENbUKOPApDw0Hfky9AEKgI/edit" target="_blank">📊 Sheet</a>
       <button id="btn-setup" class="refresh-btn" onclick="openSetupModal()">⚙️ Setup</button>
+      <button id="pending-indicator" class="pending-indicator" onclick="retryAllFailed()"></button>
       <button class="logout-btn" onclick="logout()">Sign out</button>
     </div>
+  </div>
+
+  <div class="save-failed-banner hidden" id="banner-save-failed">
+    ⚠ One or more saves did not reach Google Sheets.
+    <a onclick="retryAllFailed()">Retry now →</a>
+    <span style="margin-left:auto;font-size:11px;opacity:0.7">Your changes are stored locally and will be re-sent.</span>
   </div>
 
   <div class="setup-banner" id="banner-setup">
@@ -1108,7 +1130,10 @@ function showApp() {
   document.getElementById('app').style.display = 'block';
   applyRoleUI();
   updateSetupUI();
+  loadPendingQueue();   // recover any failed saves from previous session
+  updatePendingUI();
   loadData();
+  startAutoRefresh();
 }
 
 function applyRoleUI() {
@@ -1148,35 +1173,186 @@ function setOffline(isOffline) {
   document.getElementById('banner-offline').classList.toggle('hidden', !isOffline);
 }
 
-async function loadData() {
-  document.getElementById('workstreams').innerHTML =
-    '<div class="loading"><div class="spinner"></div>Loading tracker data…</div>';
+// ── RELIABILITY: Write queue, verification, auto-refresh ──
+let pendingQueue = [];   // [{id, payload, verifyKey, verifyVal, attempts, failed}]
+let autoRefreshTimer = null;
+
+function genId() { return Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function silentFetch() {
+  const res = await fetch(scriptUrl + '?t=' + Date.now(), { redirect: 'follow' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+function savePendingQueue() {
+  try { localStorage.setItem('sssio_pending_writes', JSON.stringify(
+    pendingQueue.map(({id, payload, verifyKey, verifyVal, attempts, failed}) =>
+      ({id, payload, verifyKey, verifyVal, attempts, failed}))
+  )); } catch(e) {}
+}
+
+function loadPendingQueue() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('sssio_pending_writes') || '[]');
+    // Recover only failed entries — in-flight ones from a previous session are lost, flag as failed
+    saved.forEach(item => {
+      if (!item.failed) item.failed = true;  // treat unconfirmed prior-session writes as failed
+      pendingQueue.push(item);
+    });
+  } catch(e) {}
+}
+
+function updatePendingUI() {
+  const el    = document.getElementById('pending-indicator');
+  const banner = document.getElementById('banner-save-failed');
+  const saving = pendingQueue.filter(x => !x.failed);
+  const failed = pendingQueue.filter(x => x.failed);
+  if (!el) return;
+  if (failed.length) {
+    el.textContent = `⚠ ${failed.length} save(s) failed — retry`;
+    el.className = 'pending-indicator failed';
+    el.style.display = '';
+    banner.classList.remove('hidden');
+  } else if (saving.length) {
+    el.textContent = `⏳ Saving…`;
+    el.className = 'pending-indicator saving';
+    el.style.display = '';
+    banner.classList.add('hidden');
+  } else {
+    el.style.display = 'none';
+    banner.classList.add('hidden');
+    pendingQueue = [];
+    savePendingQueue();
+  }
+}
+
+// Verify a write succeeded; retries the POST if not; marks failed after 3 attempts.
+async function verifyInBackground(id) {
+  const item = pendingQueue.find(x => x.id === id);
+  if (!item) return;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await sleep(3000 * attempt);   // 3s, 6s, 9s
+    try {
+      const json = await silentFetch();
+      setOffline(false);
+      if (checkVerify(item, json)) {
+        pendingQueue = pendingQueue.filter(x => x.id !== id);
+        savePendingQueue();
+        updatePendingUI();
+        return;
+      }
+    } catch(e) { /* network error — will retry */ }
+    // Re-send the write before next verification check
+    if (attempt < 3) await writeToSheet(item.payload).catch(() => {});
+  }
+
+  // All verification attempts exhausted
+  const still = pendingQueue.find(x => x.id === id);
+  if (still) { still.failed = true; savePendingQueue(); updatePendingUI(); }
+  showToast('⚠ A change may not have saved. See the header to retry.', 'error', 7000);
+}
+
+// Returns true when the sheet reflects the expected change
+function checkVerify(item, json) {
+  const rows = json.rows || [];
+  switch (item.verifyKey) {
+    case 'row_status': {
+      const row = rows.find(r => r._row === item.verifyVal._row);
+      return row && row['Status'] === item.verifyVal.Status;
+    }
+    case 'row_task': {
+      const row = rows.find(r => r._row === item.verifyVal._row);
+      return row && row['Task'] === item.verifyVal.Task;
+    }
+    case 'row_deleted':
+      return !rows.some(r => r._row === item.verifyVal._row);
+    case 'row_added':
+      return rows.some(r =>
+        r['Task'] === item.verifyVal.Task &&
+        r['Workstream'] === item.verifyVal.Workstream);
+    case 'ws_owners': {
+      const sheet = json.wsOwners || {};
+      return Object.entries(item.verifyVal).every(([ws, owners]) =>
+        owners.every(o => (sheet[ws] || []).some(x => x.name === o.name)));
+    }
+    default: return true;
+  }
+}
+
+// Queue a write for background verification
+function writeVerified(payload, verifyKey, verifyVal) {
+  const id = genId();
+  pendingQueue.push({ id, payload, verifyKey, verifyVal, attempts: 0, failed: false });
+  savePendingQueue();
+  updatePendingUI();
+  verifyInBackground(id);
+}
+
+async function retryAllFailed() {
+  const failed = pendingQueue.filter(x => x.failed);
+  if (!failed.length) return;
+  failed.forEach(x => { x.failed = false; x.attempts = 0; });
+  savePendingQueue();
+  updatePendingUI();
+  for (const item of failed) {
+    await writeToSheet(item.payload).catch(() => {});
+    verifyInBackground(item.id);
+  }
+  showToast('Retrying ' + failed.length + ' save(s)…');
+}
+
+function startAutoRefresh() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  autoRefreshTimer = setInterval(() => {
+    const anyModalOpen = document.querySelector('.modal-backdrop.open');
+    const hasPending   = pendingQueue.some(x => !x.failed);
+    if (!anyModalOpen && !hasPending && scriptUrl) loadData(true);
+  }, 90 * 1000);
+}
+
+window.addEventListener('online', () => {
+  setOffline(false);
+  const hasFailed = pendingQueue.some(x => x.failed);
+  if (hasFailed) { showToast('Back online — retrying failed saves…'); retryAllFailed(); }
+});
+window.addEventListener('offline', () => setOffline(true));
+
+window.addEventListener('beforeunload', e => {
+  if (pendingQueue.some(x => !x.failed)) {
+    e.preventDefault(); e.returnValue = 'Some changes are still being confirmed. Leave anyway?';
+  }
+});
+
+async function loadData(silent = false) {
+  if (!silent) {
+    document.getElementById('workstreams').innerHTML =
+      '<div class="loading"><div class="spinner"></div>Loading tracker data…</div>';
+  }
   try {
     let rows, headers;
     if (scriptUrl) {
-      const res = await fetch(scriptUrl, { redirect: 'follow' });
+      const res = await fetch(scriptUrl + '?t=' + Date.now(), { redirect: 'follow' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
       rows = json.rows;
       headers = json.headers;
       setOffline(false);
-      // Sheet is source of truth — replace cache completely, no merging
       if (json.contacts !== undefined) {
         const clean = deduplicateContacts(json.contacts);
         localStorage.setItem('sssio_contacts', JSON.stringify(clean));
         refreshDatalist();
-        // Push deduped version back if sheet had dupes
         if (clean.length !== json.contacts.length)
           writeToSheet({ action: 'saveContacts', contacts: clean }).catch(()=>{});
       }
       if (json.wsOwners !== undefined) {
-        // Merge: sheet wins where it has owners; keep local data for workstreams the sheet doesn't have yet
-        // (handles the case where a saveWsOwners POST failed silently)
         const sheetClean = normalizeWsOwners(json.wsOwners);
         const localRaw   = JSON.parse(localStorage.getItem('sssio_ws_owners') || '{}');
         const merged     = Object.assign({}, localRaw, sheetClean);
         const clean      = normalizeWsOwners(merged);
         localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
-        // If local had owners the sheet didn't, push the merged version back to the sheet
         if (JSON.stringify(clean) !== JSON.stringify(sheetClean))
           writeToSheet({ action: 'saveWsOwners', wsOwners: clean }).catch(()=>{});
       }
@@ -1189,12 +1365,15 @@ async function loadData() {
     }
     allRows = rows;
     renderAll(allRows);
-    document.getElementById('last-updated').textContent = 'Refreshed ' + new Date().toLocaleTimeString();
+    document.getElementById('last-updated').textContent =
+      (silent ? '↻ Auto-refreshed ' : 'Refreshed ') + new Date().toLocaleTimeString();
   } catch (e) {
     if (scriptUrl) setOffline(true);
-    document.getElementById('workstreams').innerHTML =
-      `<div class="no-results">⚠️ Could not load data.<br><br>
-       <a href="${SHEET_URL}" target="_blank" style="color:#0f3460">Open Google Sheet directly →</a></div>`;
+    if (!silent) {
+      document.getElementById('workstreams').innerHTML =
+        `<div class="no-results">⚠️ Could not load data.<br><br>
+         <a href="${SHEET_URL}" target="_blank" style="color:#0f3460">Open Google Sheet directly →</a></div>`;
+    }
   }
 }
 
@@ -1363,9 +1542,9 @@ function renderRow(t) {
     <td data-label="Update"><span class="weekly-update${latest ? '' : ' empty'}">${latest ? esc(latest) : '—'}</span></td>
     <td data-label="Quick" onclick="event.stopPropagation()">
       <div class="quick-status">
-        <button class="qs-btn qs-wip${status==='In Progress'?' active':''}" onclick="quickStatus(${rowIdx},'In Progress',this)">WIP</button>
-        <button class="qs-btn qs-done${status==='Complete'?' active':''}" onclick="quickStatus(${rowIdx},'Complete',this)">✓</button>
-        <button class="qs-btn qs-blk${status==='Blocked'?' active':''}" onclick="quickStatus(${rowIdx},'Blocked',this)">⚠</button>
+        <button class="qs-btn qs-wip${status==='In Progress'?' active':''}" data-status="In Progress" onclick="quickStatus(${rowIdx},'In Progress',this)">WIP</button>
+        <button class="qs-btn qs-done${status==='Complete'?' active':''}"  data-status="Complete"    onclick="quickStatus(${rowIdx},'Complete',this)">✓</button>
+        <button class="qs-btn qs-blk${status==='Blocked'?' active':''}"   data-status="Blocked"     onclick="quickStatus(${rowIdx},'Blocked',this)">⚠</button>
       </div>
     </td>
   </tr>`;
@@ -1377,22 +1556,40 @@ async function quickStatus(rowIdx, newStatus, btn) {
   const row = allRows.find(r => r._row === rowIdx);
   if (!row) return;
 
+  // Optimistic UI update
   btn.closest('tr').querySelectorAll('.qs-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   btn.closest('tr').querySelector('.badge').className = 'badge ' + statusClass(newStatus);
   btn.closest('tr').querySelector('.badge').textContent = newStatus;
+  const prevStatus = row['Status'];
   row['Status'] = newStatus;
   updateSummary(allRows);
 
-  await writeToSheet({ action: 'update', _row: rowIdx, data: { Status: newStatus } });
-  showToast('✓ Status updated');
+  const payload = { action: 'update', _row: rowIdx, data: { Status: newStatus } };
+  try {
+    await writeToSheet(payload);
+    writeVerified(payload, 'row_status', { _row: rowIdx, Status: newStatus });
+    showToast('✓ Status updated');
+  } catch(e) {
+    // Rollback optimistic update
+    row['Status'] = prevStatus;
+    btn.closest('tr').querySelector('.badge').className = 'badge ' + statusClass(prevStatus);
+    btn.closest('tr').querySelector('.badge').textContent = prevStatus;
+    btn.closest('tr').querySelectorAll('.qs-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.status === prevStatus));
+    updateSummary(allRows);
+    showToast('⚠ Status update failed — check connection', 'error');
+  }
 }
 
 // ── EDIT MODAL ──
+let editingSnapshot = null;  // snapshot of row when modal opened — for conflict detection
+
 function openEditModal(rowIdx) {
   const row = allRows.find(r => r._row === rowIdx);
   if (!row) return;
   editingRow = row;
+  editingSnapshot = { Status: row['Status'], Task: row['Task'], Owner: row['Owner'], 'Due Date': row['Due Date'] };
 
   document.getElementById('modal-title').textContent = 'Edit Action';
   document.getElementById('f-task').value   = row['Task'] || row['Action'] || '';
@@ -1496,20 +1693,25 @@ async function deleteTask() {
   if (!editingRow) return;
   if (!confirm('Delete this task? This cannot be undone.')) return;
   if (!scriptUrl) { openSetupModal(); return; }
-  const statusEl = document.getElementById('save-status');
+  const statusEl  = document.getElementById('save-status');
   const deleteBtn = document.getElementById('delete-btn');
   deleteBtn.disabled = true;
   deleteBtn.textContent = 'Deleting…';
+  const rowIdx = editingRow._row;
+  const payload = { action: 'delete', _row: rowIdx };
   try {
-    await writeToSheet({ action: 'delete', _row: editingRow._row });
-    allRows = allRows.filter(r => r._row !== editingRow._row);
-    closeModal();
+    await writeToSheet(payload);
+    writeVerified(payload, 'row_deleted', { _row: rowIdx });
+    allRows = allRows.filter(r => r._row !== rowIdx);
+    closeModal(true);
     renderAll(allRows);
+    showToast('✓ Task deleted');
   } catch (e) {
-    statusEl.textContent = '⚠ Delete failed';
+    statusEl.textContent = '⚠ Delete failed — check connection';
     statusEl.className = 'save-status err';
     deleteBtn.disabled = false;
     deleteBtn.textContent = '🗑 Delete';
+    showToast('⚠ Delete failed', 'error');
   }
 }
 
@@ -1561,13 +1763,39 @@ async function saveModal() {
     data['Notes History'] = existingHistory;
   }
 
+  // Conflict detection: warn if another user changed this row since the modal opened
+  if (editingRow && editingSnapshot) {
+    const current = allRows.find(r => r._row === editingRow._row);
+    if (current) {
+      const conflicts = Object.entries(editingSnapshot).filter(([k, v]) => current[k] !== v);
+      if (conflicts.length) {
+        const fields = conflicts.map(([k]) => k).join(', ');
+        const proceed = confirm(
+          `⚠ This task was updated by someone else while you had it open.\n` +
+          `Changed fields: ${fields}\n\n` +
+          `Click OK to overwrite with your version, or Cancel to discard your changes.`
+        );
+        if (!proceed) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Changes';
+          closeModal(true);
+          return;
+        }
+      }
+    }
+  }
+
   const notify = document.getElementById('f-notify').checked;
   try {
     if (editingRow) {
-      await writeToSheet({ action: 'update', _row: editingRow._row, data, notify });
+      const payload = { action: 'update', _row: editingRow._row, data, notify };
+      await writeToSheet(payload);
+      writeVerified(payload, 'row_task', { _row: editingRow._row, Task: data['Task'] });
       Object.assign(editingRow, data);
     } else {
-      await writeToSheet({ action: 'add', data, notify });
+      const payload = { action: 'add', data, notify };
+      await writeToSheet(payload);
+      writeVerified(payload, 'row_added', { Task: data['Task'], Workstream: data['Workstream'] });
       await loadData();
     }
     statusEl.textContent = '✓ Saved';
@@ -1581,9 +1809,9 @@ async function saveModal() {
       closeModal();
     }
   } catch (e) {
-    statusEl.textContent = '⚠ Save failed — check Apps Script URL';
+    statusEl.textContent = '⚠ Save failed — check connection';
     statusEl.className = 'save-status err';
-    showToast('⚠ Save failed', 'error');
+    showToast('⚠ Save failed — will retry automatically', 'error');
   }
 
   saveBtn.disabled = false;
@@ -1960,7 +2188,10 @@ function loadWsOwners() {
 function saveWsOwners(data) {
   const clean = normalizeWsOwners(data);
   localStorage.setItem('sssio_ws_owners', JSON.stringify(clean));
-  writeToSheet({ action: 'saveWsOwners', wsOwners: clean }).catch(() => {});
+  const payload = { action: 'saveWsOwners', wsOwners: clean };
+  writeToSheet(payload)
+    .then(() => writeVerified(payload, 'ws_owners', clean))
+    .catch(() => {});
 }
 function renderWsOwners(ws) {
   const all = loadWsOwners();

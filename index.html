@@ -1305,6 +1305,10 @@ function checkVerify(item, json) {
 
 // Queue a write for background verification
 function writeVerified(payload, verifyKey, verifyVal) {
+  // Drop any stale pending/failed writes for the same row — the new write supersedes them
+  if (payload._row) {
+    pendingQueue = pendingQueue.filter(x => x.payload._row !== payload._row);
+  }
   const id = genId();
   pendingQueue.push({ id, payload, verifyKey, verifyVal, attempts: 0, failed: false });
   savePendingQueue();
@@ -1829,7 +1833,9 @@ async function saveModal() {
       const payload = { action: 'add', data, notify };
       await writeToSheet(payload);
       writeVerified(payload, 'row_added', { Task: data['Task'], Workstream: data['Workstream'] });
-      await loadData();
+      // Optimistic local add — don't fetch immediately (Apps Script needs time to write)
+      const tempRow = { _row: Date.now(), ...data };
+      allRows.push(tempRow);
     }
     statusEl.textContent = '✓ Saved';
     statusEl.className = 'save-status ok';
@@ -1839,7 +1845,10 @@ async function saveModal() {
       renderAll(allRows);
       setTimeout(closeModal, 600);
     } else {
+      renderAll(allRows);
       closeModal();
+      // Sync with sheet after a short delay to get the real _row assigned by Apps Script
+      setTimeout(() => loadData(true), 5000);
     }
   } catch (e) {
     statusEl.textContent = '⚠ Save failed — check connection';

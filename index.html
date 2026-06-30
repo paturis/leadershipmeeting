@@ -1079,6 +1079,10 @@ tbody tr.row-failed td:first-child::before { content: '⚠ '; color: #c0392b; }
 </div>
 
 <script>
+// ── RUNTIME STATE (declared early to avoid TDZ before showApp) ──
+let pendingQueue = [];      // [{id, payload, verifyKey, verifyVal, attempts, failed}]
+let autoRefreshTimer = null;
+
 // ── CONFIG ──
 const PASSWORD_ADMIN  = 'SaiRam2026Admin'; // Siva & Eric only
 const PASSWORD_MEMBER = 'SaiRam2026';      // all task owners
@@ -1192,8 +1196,6 @@ function setOffline(isOffline) {
 }
 
 // ── RELIABILITY: Write queue, verification, auto-refresh ──
-let pendingQueue = [];   // [{id, payload, verifyKey, verifyVal, attempts, failed}]
-let autoRefreshTimer = null;
 
 function genId() { return Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }

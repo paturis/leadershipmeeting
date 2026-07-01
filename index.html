@@ -1108,7 +1108,6 @@ const WS_RENAME = {
 const WS_ALIASES = {
   'INFORMATION TECHNOLOGY': 'IT',
   'ADMIN':                  'ADMIN',
-  'DEVOTIONAL PROGRAM':     'DEVOTIONAL PLANNING',  // same workstream, two names
 };
 
 let allRows = [];
@@ -2974,7 +2973,6 @@ const SEED_WS_OWNERS = {
   'DECORATION':               ['ranislee108@gmail.com'],
   'SET UP':                   ['masacontracting@gmail.com','circlea15677@yahoo.com'],
   'LOGISTICS':                ['masacontracting@gmail.com','circlea15677@yahoo.com'],
-  'DEVOTIONAL PROGRAM':       ['svaidynathan@sathyasai.org','skasturi@sathyasai.us','ranislee108@gmail.com'],
   'DEVOTIONAL PLANNING':      ['svaidynathan@sathyasai.org','skasturi@sathyasai.us','ranislee108@gmail.com'],
   'AV SET UP':                ['npatel@sathyasai.us'],
   'BUDGET':                   ['ewing@sathyasai.us'],
@@ -2995,6 +2993,20 @@ function seedWsOwners() {
   if (changed) saveWsOwners(existing);
 }
 seedWsOwners();
+
+// One-time rename: DEVOTIONAL PROGRAM → DEVOTIONAL PLANNING in local storage + sheet
+(function migrateDevotionalProgram() {
+  if (localStorage.getItem('sssio_migrated_devprog')) return;
+  const owners = loadWsOwners();
+  if (owners['DEVOTIONAL PROGRAM']) {
+    const merged = [...new Set([...(owners['DEVOTIONAL PLANNING'] || []), ...owners['DEVOTIONAL PROGRAM']])];
+    owners['DEVOTIONAL PLANNING'] = merged;
+    delete owners['DEVOTIONAL PROGRAM'];
+    localStorage.setItem('sssio_ws_owners', JSON.stringify(owners));
+    writeToSheet({ action: 'renameWorkstream', oldWs: 'DEVOTIONAL PROGRAM', newWs: 'DEVOTIONAL PLANNING' }).catch(() => {});
+  }
+  localStorage.setItem('sssio_migrated_devprog', '1');
+})();
 
 // init — contacts now a map, no datalist needed
 </script>

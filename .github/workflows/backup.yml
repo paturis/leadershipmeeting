@@ -1,0 +1,53 @@
+name: Hourly Data Backup
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # every hour on the hour
+  workflow_dispatch:        # allow manual trigger from GitHub Actions UI
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch data from Apps Script
+        run: |
+          mkdir -p backups
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
+          HTTP_CODE=$(curl -s -o backups/latest.json -w "%{http_code}" \
+            --max-time 30 \
+            --location \
+            "${{ secrets.APPS_SCRIPT_URL }}")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Fetch failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+          # Validate it's real JSON with rows
+          ROWS=$(jq '.rows | length' backups/latest.json 2>/dev/null || echo "0")
+          if [ "$ROWS" = "0" ]; then
+            echo "Response has no rows — skipping backup to avoid overwriting good data"
+            exit 0
+          fi
+          echo "Fetched $ROWS rows"
+          # Also save a timestamped copy (keep last 7 days = 168 files max)
+          cp backups/latest.json "backups/${TIMESTAMP}.json"
+          # Prune backups older than 7 days
+          find backups/ -name "????-??-??T*Z.json" -mtime +7 -delete
+
+      - name: Commit backup
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backups/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            ROWS=$(jq '.rows | length' backups/latest.json)
+            git commit -m "chore: hourly backup — ${ROWS} rows ($(date -u +"%Y-%m-%d %H:%M UTC"))"
+            git push
+          fi

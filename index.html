@@ -1108,6 +1108,7 @@ const WS_RENAME = {
 const WS_ALIASES = {
   'INFORMATION TECHNOLOGY': 'IT',
   'ADMIN':                  'ADMIN',
+  'DEVOTIONAL PROGRAM':     'DEVOTIONAL PLANNING',  // same workstream, two names
 };
 
 let allRows = [];
@@ -2277,9 +2278,17 @@ function getWsOwners(ws) {
 }
 
 function saveWsOwners(data) {
-  // data is already {WS: [email,...]} after normalizeWsOwners
+  // data is {WS: [email,...]}; resolve names so the sheet gets Name + Email columns populated
   localStorage.setItem('sssio_ws_owners', JSON.stringify(data));
-  const payload = { action: 'saveWsOwners', wsOwners: data };
+  const contactMap = loadContacts();
+  // Build flat row array the Apps Script can write directly to the WS Owners sheet
+  const rows = [];
+  Object.entries(data).forEach(([ws, emails]) => {
+    (emails || []).forEach(email => {
+      rows.push({ workstream: ws, name: contactMap[email.toLowerCase()] || '', email });
+    });
+  });
+  const payload = { action: 'saveWsOwners', wsOwners: data, wsOwnersRows: rows };
   writeToSheet(payload)
     .then(() => writeVerified(payload, 'ws_owners', data))
     .catch(() => {});
@@ -2808,9 +2817,18 @@ function doPost(e) {
     var wSheet = ss3.getSheetByName('WS Owners') || ss3.insertSheet('WS Owners');
     wSheet.clearContents();
     wSheet.appendRow(['Workstream', 'Name', 'Email']);
-    Object.entries(payload.wsOwners || {}).forEach(function([ws, owners]) {
-      owners.forEach(function(o) { wSheet.appendRow([ws, o.name, o.email]); });
-    });
+    if (payload.wsOwnersRows) {
+      // New flat format: [{workstream, name, email}] with names pre-resolved from contacts
+      payload.wsOwnersRows.forEach(function(r) { wSheet.appendRow([r.workstream, r.name, r.email]); });
+    } else {
+      // Legacy fallback: {WS: [email|{name,email}]}
+      Object.entries(payload.wsOwners || {}).forEach(function([ws, owners]) {
+        owners.forEach(function(o) {
+          if (typeof o === 'string') wSheet.appendRow([ws, '', o]);
+          else wSheet.appendRow([ws, o.name || '', o.email || '']);
+        });
+      });
+    }
 
   } else if (payload.action === 'saveWorkstreams') {
     var ss4 = SpreadsheetApp.getActiveSpreadsheet();
